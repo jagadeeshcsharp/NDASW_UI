@@ -1,14 +1,20 @@
 <div class="document-selector">
-  <button class="selector-toggle" (click)="toggleSelector()">
-    <span class="text">Documents</span>
-    <span class="count" *ngIf="getSelectedCount() > 0">({{ getSelectedCount() }})</span>
+  <button class="selector-toggle" (click)="toggleSelector()" [attr.aria-expanded]="showSelector">
+    <svg class="doc-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+      <polyline points="14 2 14 8 20 8"></polyline>
+    </svg>
+    <span class="text">Select Document</span>
+    <span class="count" *ngIf="getSelectedCount() > 0">({{ getSelectedCount() }} selected)</span>
     <span class="arrow">{{ showSelector ? '▼' : '▶' }}</span>
   </button>
 
   <div class="selector-panel" *ngIf="showSelector">
     <div class="panel-header">
-      <h3>Select RAG Source</h3>
-      <p class="selector-hint">Select one document as your RAG source</p>
+      <div class="panel-header-text">
+        <h3>Available Documents</h3>
+        <p class="selector-hint">Click on a document to select it as your RAG source</p>
+      </div>
       <button class="refresh-btn" (click)="loadDocuments()" [disabled]="loading">
         {{ loading ? 'Loading...' : 'Refresh' }}
       </button>

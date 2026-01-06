@@ -16,7 +16,7 @@ export class DocumentSelectorComponent implements OnInit {
 
   documents: Document[] = [];
   loading = false;
-  showSelector = false;
+  showSelector = true;
 
   constructor(private documentService: DocumentService) {}
 

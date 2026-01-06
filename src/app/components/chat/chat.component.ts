@@ -112,6 +112,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  setExamplePrompt(prompt: string): void {
+    this.question = prompt;
+    this.messageInput.nativeElement.focus();
+  }
+
   sendMessage(): void {
     if (!this.question.trim() || this.loading) {
       return;
