@@ -1,9 +1,8 @@
-import { Component, OnInit, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SessionService } from '../../services/session.service';
 import { ChatSession } from '../../models/chat.models';
 import { Observable } from 'rxjs';
-import { take } from 'rxjs/operators';
 import { AuthService } from 'src/app/services/auth.service';
 
 @Component({
@@ -16,7 +15,7 @@ import { AuthService } from 'src/app/services/auth.service';
     '[class.collapsed]': 'collapsed'
   }
 })
-export class SessionListComponent implements OnInit {
+export class SessionListComponent {
   @Input() collapsed = false;
   @Output() toggleSidebar = new EventEmitter<void>();
   sessions$: Observable<ChatSession[]>;
@@ -30,11 +29,7 @@ export class SessionListComponent implements OnInit {
     this.userEmail = this.authService.getUserEmail();
   }
 
-  ngOnInit(): void {}
-
   createNewSession(): void {
-    // Clear current session to prepare for new chat
-    // Session will be created when user asks first question
     this.sessionService.setCurrentSession(null);
   }
 
@@ -53,16 +48,10 @@ export class SessionListComponent implements OnInit {
     this.toggleSidebar.emit();
   }
 
-  /**
-   * Get user initials from name
-   * Returns first letter of first name + first letter of last name
-   * Filters out text in parentheses (e.g., "(Contractor)")
-   */
   getInitials(): string {
     if (!this.userName) {
       return '?';
     }
-    // Remove text in parentheses
     const cleanName = this.userName.replace(/\s*\([^)]*\)\s*/g, '').trim();
     const nameParts = cleanName.split(/\s+/).filter(part => part.length > 0);
     

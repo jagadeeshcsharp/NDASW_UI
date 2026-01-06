@@ -27,9 +27,6 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // MSAL is already initialized at app bootstrap (see main.ts)
-    
-    // Subscribe to authentication state
     this.authService.authState$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isAuthenticated => {
@@ -37,20 +34,15 @@ export class AppComponent implements OnInit, OnDestroy {
         this.userName = this.authService.getUserName();
       });
 
-    // Load sidebar state from localStorage
     const savedState = localStorage.getItem('sidebarCollapsed');
     const isMobile = window.innerWidth < 768;
     
     if (savedState !== null) {
       this.sidebarCollapsed = savedState === 'true';
     } else {
-      // Default to collapsed on mobile
       this.sidebarCollapsed = isMobile;
     }
 
-    // Don't create default session - session will be created when user asks first question
-    // Only auto-select first session on initial load if no current session
-    // Don't interfere with explicit "New chat" (null session) or deletions
     this.sessionService.sessions$
       .pipe(takeUntil(this.destroy$), take(1))
       .subscribe(sessions => {
@@ -58,7 +50,6 @@ export class AppComponent implements OnInit, OnDestroy {
           this.sessionService.currentSession$
             .pipe(take(1))
             .subscribe(current => {
-              // Only auto-select on initial load if no current session
               if (!current) {
                 this.sessionService.setCurrentSession(sessions[0]);
               }
@@ -66,12 +57,10 @@ export class AppComponent implements OnInit, OnDestroy {
         }
       });
     
-    // Handle case when all sessions are deleted
     this.sessionService.sessions$
       .pipe(takeUntil(this.destroy$))
       .subscribe(sessions => {
         if (sessions.length === 0) {
-          // All sessions deleted - ensure current session is null
           this.sessionService.currentSession$
             .pipe(take(1))
             .subscribe(current => {
@@ -114,7 +103,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   @HostListener('window:resize', ['$event'])
   onResize(event: any): void {
-    // Auto-collapse on mobile
     if (event.target.innerWidth < 768 && !this.sidebarCollapsed) {
       this.sidebarCollapsed = true;
       localStorage.setItem('sidebarCollapsed', 'true');

@@ -14,6 +14,11 @@ export interface SessionApiResponse {
   updatedAt: string;
 }
 
+export interface SessionsApiResponse {
+  value?: SessionApiResponse[];
+  Count?: number;
+}
+
 export interface MessageApiResponse {
   messageId: string;
   sessionId: string;
@@ -27,7 +32,7 @@ export interface MessageApiResponse {
   providedIn: 'root'
 })
 export class DatabaseService {
-  private apiUrl = environment.databaseApiUrl;
+  private apiUrl = environment.dotnetapi;
   
   private httpOptions = {
     headers: new HttpHeaders({
@@ -35,127 +40,163 @@ export class DatabaseService {
     })
   };
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    console.log('DatabaseService initialized with API URL:', this.apiUrl);
+  }
 
-  /**
-   * Get all sessions for a user
-   */
   getSessions(userId: string): Observable<ChatSession[]> {
     if (!this.apiUrl) {
       console.warn('Database API URL not configured');
       return of([]);
     }
 
-    return this.http.get<SessionApiResponse[]>(`${this.apiUrl}/sessions/${encodeURIComponent(userId)}`, this.httpOptions).pipe(
-      map(sessions => sessions.map(s => this.mapSessionFromApi(s))),
+    const url = `${this.apiUrl}/sessions/${encodeURIComponent(userId)}`;
+    console.log(`Fetching sessions from: ${url}`);
+    
+    return this.http.get<SessionApiResponse[] | SessionsApiResponse>(url, this.httpOptions).pipe(
+      map(response => {
+        const sessions = Array.isArray(response) ? response : (response as SessionsApiResponse).value || [];
+        console.log(`Received ${sessions.length} sessions from API:`, sessions);
+        return sessions.map(s => this.mapSessionFromApi(s));
+      }),
       catchError(error => {
         console.error('Error fetching sessions:', error);
-        return of([]);
-      })
-    );
-  }
-
-  /**
-   * Get messages for a session
-   */
-  getSessionMessages(sessionId: string): Observable<ChatMessage[]> {
-    if (!this.apiUrl) {
-      console.warn('Database API URL not configured');
-      return of([]);
-    }
-
-    return this.http.get<MessageApiResponse[]>(`${this.apiUrl}/sessions/${encodeURIComponent(sessionId)}/messages`, this.httpOptions).pipe(
-      map(messages => messages.map(m => this.mapMessageFromApi(m))),
-      catchError(error => {
-        console.error('Error fetching messages:', error);
-        return of([]);
-      })
-    );
-  }
-
-  /**
-   * Create a new session
-   */
-  createSession(userId: string, sessionId: string, title: string, selectedDocumentIds?: string[]): Observable<ChatSession> {
-    if (!this.apiUrl) {
-      return throwError(() => new Error('Database API URL not configured'));
-    }
-
-    return this.http.post<SessionApiResponse>(`${this.apiUrl}/sessions`, {
-      sessionId,
-      userId,
-      title,
-      selectedDocumentIds: selectedDocumentIds || []
-    }, this.httpOptions).pipe(
-      map(response => this.mapSessionFromApi(response)),
-      catchError(error => {
-        console.error('Error creating session:', error);
-        return throwError(() => error);
-      })
-    );
-  }
-
-  /**
-   * Add a message to a session
-   */
-  addMessage(sessionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): Observable<ChatMessage> {
-    if (!this.apiUrl) {
-      return throwError(() => new Error('Database API URL not configured'));
-    }
-
-    const messageId = this.generateId();
-    return this.http.post<MessageApiResponse>(`${this.apiUrl}/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      messageId,
-      role: message.role,
-      content: message.content,
-      rating: message.rating || null
-    }, this.httpOptions).pipe(
-      map(response => this.mapMessageFromApi(response)),
-      catchError(error => {
-        console.error('Error adding message:', error);
-        return throwError(() => error);
-      })
-    );
-  }
-
-  /**
-   * Update message rating
-   */
-  updateMessageRating(messageId: string, rating: 'up' | 'down' | null): Observable<void> {
-    if (!this.apiUrl) {
-      console.error('❌ Database API URL not configured');
-      return throwError(() => new Error('Database API URL not configured'));
-    }
-
-    const url = `${this.apiUrl}/messages/${encodeURIComponent(messageId)}/rating`;
-    // Explicitly handle null - send null string or null value
-    const body = { rating: rating === null ? null : rating };
-    console.log(`📡 Calling API: PUT ${url}`, body);
-
-    return this.http.put<void>(url, body, this.httpOptions).pipe(
-      catchError(error => {
-        console.error('❌ Error updating message rating:', error);
         console.error('Error details:', {
           status: error.status,
           statusText: error.statusText,
           message: error.message,
           url: url
         });
+        return of([]);
+      })
+    );
+  }
+
+  getSessionMessages(sessionId: string): Observable<ChatMessage[]> {
+    if (!this.apiUrl) {
+      console.warn('Database API URL not configured');
+      return of([]);
+    }
+
+    const url = `${this.apiUrl}/sessions/${encodeURIComponent(sessionId)}/messages`;
+    console.log(`Fetching messages from: ${url}`);
+    
+    return this.http.get<MessageApiResponse[]>(url, this.httpOptions).pipe(
+      map(messages => {
+        console.log(`Received ${messages.length} messages from API for session ${sessionId}`);
+        return messages.map(m => this.mapMessageFromApi(m));
+      }),
+      catchError(error => {
+        console.error('Error fetching messages:', error);
+        console.error('Error details:', {
+          status: error.status,
+          statusText: error.statusText,
+          message: error.message,
+          url: url
+        });
+        return of([]);
+      })
+    );
+  }
+
+  createSession(userId: string, sessionId: string, title: string, selectedDocumentIds?: string[]): Observable<ChatSession> {
+    if (!this.apiUrl) {
+      return throwError(() => new Error('Database API URL not configured'));
+    }
+
+    const requestBody = {
+      SessionId: sessionId,
+      UserId: userId,
+      Title: title,
+      SelectedDocumentIds: selectedDocumentIds || []
+    };
+    
+    const url = `${this.apiUrl}/sessions`;
+    
+    console.log(`Creating session - URL: ${url}`);
+    console.log(`Request body:`, JSON.stringify(requestBody, null, 2));
+
+    return this.http.post<SessionApiResponse>(url, requestBody, this.httpOptions).pipe(
+      map(response => {
+        console.log('Session created successfully:', response);
+        const mappedSession = this.mapSessionFromApi(response);
+        if (mappedSession.id !== sessionId) {
+          console.warn(`API returned different sessionId: ${mappedSession.id} (expected: ${sessionId})`);
+        }
+        return mappedSession;
+      }),
+      catchError(error => {
+        console.error('Error creating session:', error);
+        console.error('Error status:', error.status);
+        console.error('Error statusText:', error.statusText);
+        console.error('Error message:', error.message);
+        if (error.error) {
+          console.error('Error body:', JSON.stringify(error.error, null, 2));
+        }
+        if (error.url) {
+          console.error('Error URL:', error.url);
+        }
         return throwError(() => error);
       })
     );
   }
 
-  /**
-   * Update session
-   * NOTE: This functionality has been removed - selected documents cannot be changed after session creation
-   * Session updates are no longer supported to prevent changing RAG sources after selection
-   */
-  // updateSession method removed - sessions cannot be updated after creation
+  addMessage(sessionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>): Observable<ChatMessage> {
+    if (!this.apiUrl) {
+      return throwError(() => new Error('Database API URL not configured'));
+    }
 
-  /**
-   * Delete a session
-   */
+    const messageId = this.generateId();
+    const requestBody = {
+      MessageId: messageId,
+      Role: message.role,
+      Content: message.content,
+      Rating: message.rating || null
+    };
+    const url = `${this.apiUrl}/sessions/${encodeURIComponent(sessionId)}/messages`;
+    
+    console.log(`Adding message - URL: ${url}`);
+    console.log(`Request body:`, JSON.stringify(requestBody, null, 2));
+
+    return this.http.post<MessageApiResponse>(url, requestBody, this.httpOptions).pipe(
+      map(response => {
+        console.log('Message added successfully:', response);
+        return this.mapMessageFromApi(response);
+      }),
+      catchError(error => {
+        console.error('Error adding message:', error);
+        console.error('Error status:', error.status);
+        console.error('Error statusText:', error.statusText);
+        console.error('Error message:', error.message);
+        if (error.error) {
+          console.error('Error body:', JSON.stringify(error.error, null, 2));
+        }
+        if (error.url) {
+          console.error('Error URL:', error.url);
+        }
+        return throwError(() => error);
+      })
+    );
+  }
+
+  updateMessageRating(messageId: string, rating: 'up' | 'down' | null): Observable<void> {
+    if (!this.apiUrl) {
+      console.error('Database API URL not configured');
+      return throwError(() => new Error('Database API URL not configured'));
+    }
+
+    const url = `${this.apiUrl}/messages/${encodeURIComponent(messageId)}/rating`;
+    const body = { Rating: rating === null ? null : rating };
+    console.log(`Calling API: PUT ${url}`, body);
+
+    return this.http.put<void>(url, body, this.httpOptions).pipe(
+      catchError(error => {
+        console.error('Error updating message rating:', error);
+        return throwError(() => error);
+      })
+    );
+  }
+
   deleteSession(sessionId: string): Observable<void> {
     if (!this.apiUrl) {
       return throwError(() => new Error('Database API URL not configured'));
@@ -169,23 +210,17 @@ export class DatabaseService {
     );
   }
 
-  /**
-   * Map API response to ChatSession model
-   */
   private mapSessionFromApi(apiSession: SessionApiResponse): ChatSession {
     return {
       id: apiSession.sessionId,
       title: apiSession.title,
-      messages: [], // Messages are loaded separately
+      messages: [],
       selectedDocumentIds: apiSession.selectedDocumentIds || [],
       createdAt: new Date(apiSession.createdAt),
       updatedAt: new Date(apiSession.updatedAt)
     };
   }
 
-  /**
-   * Map API response to ChatMessage model
-   */
   private mapMessageFromApi(apiMessage: MessageApiResponse): ChatMessage {
     return {
       id: apiMessage.messageId,
@@ -196,9 +231,6 @@ export class DatabaseService {
     };
   }
 
-  /**
-   * Generate a unique ID (same format as SessionService)
-   */
   private generateId(): string {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }

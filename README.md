@@ -6,11 +6,11 @@ A modern Angular-based chatbot application with RAG (Retrieval-Augmented Generat
 
 - 💬 **Chat Interface**: Interactive chat interface with message history
 - 📚 **Document Selection**: Select documents for RAG-based queries
-- 💾 **Database Integration**: Sessions and messages stored in Azure SQL Database
+- 💾 **Database Integration**: Sessions and messages stored in Azure SQL Database via .NET Web API
 - ⭐ **Message Ratings**: Thumbs up/down rating system for messages
 - 🔐 **Azure AD Authentication**: Microsoft Authentication Library (MSAL) integration
 - 🔄 **Session Management**: Create, view, and delete chat sessions
-- 🌐 **Backend Integration**: Supports n8n webhooks or .NET API endpoints
+- 🌐 **Backend Integration**: n8n webhook for chat requests
 - 📱 **Responsive Design**: Mobile-friendly interface with collapsible sidebar
 
 ## Prerequisites
@@ -18,7 +18,7 @@ A modern Angular-based chatbot application with RAG (Retrieval-Augmented Generat
 - Node.js (v18 or higher)
 - npm or yarn
 - Angular CLI 16.2.0 or higher
-- .NET 10.0 SDK (for API backend)
+- .NET Web API backend (for database operations)
 - Azure SQL Database (for data persistence)
 
 ## Installation
@@ -26,7 +26,7 @@ A modern Angular-based chatbot application with RAG (Retrieval-Augmented Generat
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd cbot-ang-dotnet-n8n-cursor
+   cd NDASW_UI
    ```
 
 2. **Install dependencies**
@@ -35,30 +35,19 @@ A modern Angular-based chatbot application with RAG (Retrieval-Augmented Generat
    ```
 
 3. **Configure environment**
-   - Update `src/environments/environment.ts` for development
-   - Update `src/environments/environment.prod.ts` for production
+   - Update `src/environments/environment.ts` with your configuration:
+     - `n8nChatWebhookUrl`: Your n8n webhook URL for chat requests
+     - `databaseApiUrl`: Your .NET Web API URL for database operations
 
 ## Configuration
 
-### Development Environment (`src/environments/environment.ts`)
-
-```typescript
-export const environment = {
-  production: false,
-  databaseApiUrl: 'http://localhost:5000/api/database',
-  useDatabase: true,
-  // ... other configurations
-};
-```
-
-### Production Environment (`src/environments/environment.prod.ts`)
+### Environment Configuration (`src/environments/environment.ts`)
 
 ```typescript
 export const environment = {
   production: true,
-  databaseApiUrl: 'https://your-api.azurewebsites.net/api/database',
-  useDatabase: true,
-  // ... other configurations
+  n8nChatWebhookUrl: 'https://your-n8n-webhook-url',
+  databaseApiUrl: 'https://your-api.azurewebsites.net/api/database'
 };
 ```
 
@@ -80,33 +69,9 @@ npm run build -- --configuration production
 
 The built files will be in the `dist/angular-chatbot` directory.
 
-## Database Setup
-
-### 1. Create Database Schema
-
-Execute the SQL script in Azure SQL Database Query Editor:
-
-```bash
-complete-database-schema-with-drop.sql
-```
-
-This creates:
-- `ChatSessions` table
-- `ChatMessages` table
-- `Documents` table
-- Required stored procedures
-
-### 2. (Optional) Insert Sample Data
-
-```bash
-sample-database-data.sql
-```
-
 ## API Backend
 
-The application requires a .NET Web API backend. The API should be located at `../chatbot-api/` relative to this project.
-
-### API Endpoints
+The application requires a .NET Web API backend for database operations. The API should provide the following endpoints:
 
 - `GET /api/database/sessions/{userId}` - Get all sessions for a user
 - `GET /api/database/sessions/{sessionId}/messages` - Get messages for a session
@@ -114,15 +79,6 @@ The application requires a .NET Web API backend. The API should be located at `.
 - `POST /api/database/sessions/{sessionId}/messages` - Add a message to a session
 - `PUT /api/database/messages/{messageId}/rating` - Update message rating
 - `DELETE /api/database/sessions/{sessionId}` - Delete a session
-
-### Running the API
-
-```bash
-cd ../chatbot-api
-dotnet run
-```
-
-The API will be available at `http://localhost:5000`
 
 ## Project Structure
 
@@ -133,21 +89,18 @@ src/
 │   │   ├── chat/              # Chat interface component
 │   │   ├── document-selector/ # Document selection component
 │   │   └── session-list/      # Session list sidebar component
-│   ├── guards/
-│   │   └── auth.guard.ts      # Authentication guard
 │   ├── models/
 │   │   └── chat.models.ts     # TypeScript interfaces
 │   ├── services/
 │   │   ├── auth.service.ts    # MSAL authentication service
-│   │   ├── chat.service.ts    # Chat API service
+│   │   ├── chat.service.ts    # Chat API service (n8n)
 │   │   ├── database.service.ts # Database API service
 │   │   ├── document.service.ts # Document service
 │   │   └── session.service.ts  # Session management service
 │   ├── app.component.ts        # Root component
 │   └── main.ts                 # Application bootstrap
 ├── environments/
-│   ├── environment.ts          # Development configuration
-│   └── environment.prod.ts     # Production configuration
+│   └── environment.ts          # Configuration
 └── index.html                  # Application entry point
 ```
 
@@ -158,12 +111,13 @@ src/
 - **MSAL Angular 3.1.0** - Microsoft Authentication Library
 - **RxJS 7.8.0** - Reactive programming
 - **Azure SQL Database** - Data persistence
-- **.NET 10.0** - Backend API
+- **.NET Web API** - Backend API for database operations
+- **n8n** - Workflow automation for chat processing
 
 ## Features in Detail
 
 ### Session Management
-- Sessions are automatically saved to Azure SQL Database
+- Sessions are automatically saved to Azure SQL Database via .NET Web API
 - Sessions persist across browser refreshes
 - Users can delete sessions
 - Session history is loaded on app startup
@@ -180,16 +134,16 @@ src/
 
 ### Authentication
 - Azure AD authentication via MSAL
-- Supports both popup and redirect flows
+- Supports redirect flow
 - User ID is used to filter sessions in the database
 
 ## Troubleshooting
 
 ### Sessions Not Loading
 - Check browser console for errors
-- Verify `useDatabase: true` in environment file
-- Verify API URL is correct
+- Verify `databaseApiUrl` is correct in environment file
 - Check if API is running and accessible
+- Verify user authentication
 
 ### Ratings Not Saving
 - Check browser console for API errors
@@ -198,13 +152,7 @@ src/
 
 ### CORS Errors
 - Ensure API CORS is configured to allow your Angular app origin
-- Check API `Program.cs` for CORS configuration
-
-## Development Notes
-
-- The app uses a fallback user ID (`user@example.com`) in development mode when not authenticated
-- localStorage is used as a fallback when database is unavailable
-- All database operations are logged to the console for debugging
+- Check API CORS configuration
 
 ## License
 
@@ -213,4 +161,3 @@ src/
 ## Support
 
 [Add support contact information here]
-

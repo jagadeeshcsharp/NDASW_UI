@@ -25,7 +25,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   question = '';
   loading = false;
   selectedDocumentIds: string[] = [];
-  useN8n = true; // Toggle between n8n and .NET
   selectedRagSource: string = 'None';
   ragSourceOptions: string[] = ['None'];
   selectedRagSourceNames: string[] = []; // Display names for selected RAG sources
@@ -42,12 +41,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Load all documents for name lookup
     this.documentService.getMockDocuments().subscribe(documents => {
       this.allDocuments = documents;
       const fileNames = documents.map(doc => doc.name);
       this.ragSourceOptions = ['None', ...fileNames];
-      // Update RAG source names when documents are loaded
       this.updateRagSourceNames();
     });
 
@@ -60,31 +57,24 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.currentSession = session;
         this.messages = session?.messages || [];
         
-        // Handle new chat scenario: when session becomes null, reset everything
         if (session === null) {
-          // New chat clicked - clear previous selection and question
           this.selectedDocumentIds = [];
           this.selectedRagSourceNames = [];
           this.selectedRagSource = 'None';
-          this.question = ''; // Clear any typed question
-          this.showDocumentSelector = true; // Show selector for new chat
+          this.question = '';
+          this.showDocumentSelector = true;
         } else {
-          // Existing session: use session's selectedDocumentIds if available
           const sessionDocIds = session.selectedDocumentIds || [];
           if (sessionDocIds.length > 0) {
             this.selectedDocumentIds = [sessionDocIds[0]];
           } else {
-            // Session exists but has no selectedDocumentIds - clear selection
             this.selectedDocumentIds = [];
           }
-          // Hide selector for existing sessions
           this.showDocumentSelector = false;
         }
         
-        // Update selected RAG source based on current selectedDocumentIds
         this.updateRagSourceNames();
         
-        // Set selectedRagSource for backward compatibility (used in sendMessage)
         if (this.selectedDocumentIds.length > 0 && this.allDocuments.length > 0) {
           const selectedDoc = this.allDocuments.find(doc => doc.id === this.selectedDocumentIds[0]);
           this.selectedRagSource = selectedDoc?.name || 'None';
@@ -92,7 +82,6 @@ export class ChatComponent implements OnInit, OnDestroy {
           this.selectedRagSource = 'None';
         }
         
-        // Load ratings from messages into the Map for quick access
         this.messageRatings.clear();
         this.messages.forEach(message => {
           if (message.rating) {
@@ -100,9 +89,6 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
         });
         
-        // Only scroll to bottom if:
-        // 1. User was already near the bottom, OR
-        // 2. A new message was added (message count increased)
         const newMessageAdded = this.messages.length > previousMessageCount;
         if (wasNearBottom || newMessageAdded) {
           setTimeout(() => this.scrollToBottom(), 0);
@@ -110,16 +96,12 @@ export class ChatComponent implements OnInit, OnDestroy {
       });
   }
 
-  /**
-   * Update the display names for selected RAG sources based on selectedDocumentIds
-   */
   private updateRagSourceNames(): void {
     if (!this.selectedDocumentIds || this.selectedDocumentIds.length === 0 || this.allDocuments.length === 0) {
       this.selectedRagSourceNames = [];
       return;
     }
 
-    // Single selection: only take the first document
     const selectedDocId = this.selectedDocumentIds[0];
     const doc = this.allDocuments.find(d => d.id === selectedDocId);
     this.selectedRagSourceNames = doc?.name ? [doc.name] : [];
@@ -137,26 +119,19 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     const questionText = this.question.trim();
     
-    // Check if RAG source is selected (mandatory - single selection)
     if (this.selectedDocumentIds.length === 0) {
       alert('Please select a RAG source document before sending a message.');
-      this.showDocumentSelector = true; // Show selector if hidden
+      this.showDocumentSelector = true;
       return;
     }
 
-    // Create session only when first question is asked
     let sessionToUse = this.currentSession;
     if (!sessionToUse) {
-      // Create new session with title from first question and selectedDocumentIds
       const sessionTitle = questionText.length > 50 ? questionText.substring(0, 50) + '...' : questionText;
       sessionToUse = this.sessionService.createSession(sessionTitle, this.selectedDocumentIds);
-      
-      // Don't manually set currentSession - let the observable handle it
-      // The createSession method already calls setCurrentSession with selectedDocumentIds
-      this.showDocumentSelector = false; // Hide selector after session is created
+      this.showDocumentSelector = false;
     }
 
-    // Ensure sessionToUse is not null (TypeScript guard)
     if (!sessionToUse) {
       console.error('Failed to create or get session');
       return;
@@ -167,17 +142,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       content: questionText
     };
 
-    // Add user message immediately
     this.sessionService.addMessage(sessionToUse.id, userMessage);
     this.question = '';
     this.loading = true;
 
-    // Prepare request - include selectedRagSource (single selection)
-    // The request includes all necessary information for the n8n webhook:
-    // - sessionId: For maintaining conversation context
-    // - question: The user's question
-    // - selectedDocumentIds: Single document ID array for RAG
-    // - ragSource: Document name (single selection)
     const selectedDocId = this.selectedDocumentIds[0];
     const selectedDoc = this.allDocuments.find(doc => doc.id === selectedDocId);
     const ragSourceName = selectedDoc?.name || selectedDocId;
@@ -189,15 +157,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       ragSource: ragSourceName
     };
 
-    // Log the request for debugging (including ragSource)
     console.log('Sending message to n8n webhook:', request);
 
-    // Use real n8n webhook API (replaced mock response)
-    // The ChatService handles:
-    // - Response format conversion (handles various n8n response formats)
-    // - Fallback to dummy response if webhook fails
-    // - Error handling and logging
-    this.chatService.sendMessage(request, this.useN8n).subscribe({
+    this.chatService.sendMessage(request).subscribe({
       next: (response) => {
         console.log('Response from n8n:', response);
         if (!sessionToUse) {
@@ -214,12 +176,9 @@ export class ChatComponent implements OnInit, OnDestroy {
         setTimeout(() => this.scrollToBottom(), 0);
       },
       error: (error) => {
-        // Error handler for edge cases (though ChatService now returns dummy response on failure)
-        // This handler provides additional error context if needed
         console.error('Error sending message to n8n:', error);
         let errorMessage = 'Sorry, I encountered an error. Please try again.';
         
-        // Provide more specific error messages based on HTTP status codes
         if (error.status === 0) {
           errorMessage = 'Unable to connect to the server. Please check your internet connection.';
         } else if (error.status >= 500) {
@@ -230,7 +189,6 @@ export class ChatComponent implements OnInit, OnDestroy {
           errorMessage = error.error.message;
         }
         
-        // Add error message to chat history
         if (!sessionToUse) {
           console.error('Session is null when trying to add error message');
           this.loading = false;
@@ -248,33 +206,19 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   onDocumentSelectionChange(documentIds: string[]): void {
     if (documentIds.length === 0) {
-      // Don't allow clearing selection - one is required
       return;
     }
     
-    // Single selection: take only the first document
     this.selectedDocumentIds = [documentIds[0]];
-    
-    // Hide document selector after selection
     this.showDocumentSelector = false;
-    
-    // Update RAG source names for display (for header)
     this.updateRagSourceNames();
     
-    // Set selectedRagSource for backward compatibility
     if (this.allDocuments.length > 0) {
       const selectedDoc = this.allDocuments.find(doc => doc.id === this.selectedDocumentIds[0]);
       this.selectedRagSource = selectedDoc?.name || 'None';
     }
-    
-    // Note: Session will be created when user asks first question
-    // We don't create session here, just store the selection in component state
   }
   
-  /**
-   * Check if RAG source is required (for new sessions)
-   * Note: Simplified - just check if document is selected
-   */
   get isRagSourceRequired(): boolean {
     return this.selectedDocumentIds.length === 0;
   }
@@ -303,11 +247,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
 
-  /**
-   * Rate a message with thumbs up or down
-   * When a rating is selected, only that button is shown
-   * Saves the rating to localStorage via SessionService
-   */
   rateMessage(messageId: string, rating: 'up' | 'down'): void {
     if (!this.currentSession) {
       return;
@@ -317,16 +256,13 @@ export class ChatComponent implements OnInit, OnDestroy {
     let newRating: 'up' | 'down' | null;
     
     if (currentRating === rating) {
-      // Toggle off if clicking the same rating - show both buttons again
       newRating = null;
       this.messageRatings.set(messageId, null);
     } else {
-      // Set the new rating - only this button will be shown
       newRating = rating;
       this.messageRatings.set(messageId, rating);
     }
 
-    // Save rating to localStorage via SessionService
     this.sessionService.updateMessageRating(this.currentSession.id, messageId, newRating);
   }
 
@@ -334,10 +270,6 @@ export class ChatComponent implements OnInit, OnDestroy {
     return this.messageRatings.get(messageId) || null;
   }
 
-  /**
-   * Check if a rating button should be shown
-   * Only show the selected rating, or both if none selected
-   */
   shouldShowRatingButton(messageId: string, rating: 'up' | 'down'): boolean {
     const currentRating = this.getMessageRating(messageId);
     return currentRating === null || currentRating === rating;

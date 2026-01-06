@@ -11,13 +11,12 @@ import { Document } from '../../models/chat.models';
   styleUrls: ['./document-selector.component.css']
 })
 export class DocumentSelectorComponent implements OnInit {
-  @Input() selectedDocumentIds: string[] = []; // For backward compatibility, but only first item is used
-  @Output() selectionChange = new EventEmitter<string[]>(); // Emits array with single item
+  @Input() selectedDocumentIds: string[] = [];
+  @Output() selectionChange = new EventEmitter<string[]>();
 
   documents: Document[] = [];
   loading = false;
   showSelector = false;
-  useN8n = true; // Toggle between n8n and .NET
 
   constructor(private documentService: DocumentService) {}
 
@@ -27,9 +26,6 @@ export class DocumentSelectorComponent implements OnInit {
 
   loadDocuments(): void {
     this.loading = true;
-    
-    // For development, use mock data. In production, use:
-    // this.documentService.loadDocuments(this.useN8n).subscribe(...)
     this.documentService.getMockDocuments().subscribe({
       next: (docs) => {
         this.documents = docs;
@@ -43,7 +39,6 @@ export class DocumentSelectorComponent implements OnInit {
   }
 
   selectDocument(documentId: string): void {
-    // Single selection: replace the array with just the selected document
     this.selectedDocumentIds = [documentId];
     this.selectionChange.emit(this.selectedDocumentIds);
   }

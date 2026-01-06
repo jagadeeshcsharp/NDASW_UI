@@ -41,15 +41,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: none;
   background: transparent;
   color: #1f1f1f;
   font-size: 14px;
   font-weight: 400;
   cursor: pointer;
-  border-radius: 8px;
-  transition: background-color 0.15s ease;
+  border-radius: 12px;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
   width: 100%;
 }
@@ -150,10 +150,10 @@
 .session-item {
   display: flex;
   align-items: center;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   gap: 8px;
 }
@@ -195,16 +195,16 @@
   align-items: center;
   justify-content: center;
   padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  border-radius: 6px;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .delete-btn:hover {
   color: #1f1f1f;
-  background-color: #d0d0d0;
+  background-color: #e0e0e0;
 }
 
 .delete-btn svg {
