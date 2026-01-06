@@ -1,0 +1,112 @@
+<div class="chat-container">
+  <div class="chat-header">
+    <div class="header-left">
+      <h2>{{ currentSession?.title || 'Select or create a chat session' }}</h2>
+    </div>
+    <div class="header-right">
+      <label class="rag-label">RAG source:</label>
+      <div class="rag-display" *ngIf="selectedRagSourceNames.length > 0">
+        <span class="rag-source-name">{{ selectedRagSourceNames[0] }}</span>
+      </div>
+      <div class="rag-display no-source" *ngIf="selectedRagSourceNames.length === 0">
+        None
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Selector for New Sessions (Mandatory) -->
+  <div class="document-selector-container" *ngIf="showDocumentSelector">
+    <div class="selector-header">
+      <h3>Select RAG Source (Required)</h3>
+      <p class="selector-subtitle">Please select one document to use as a RAG source for this chat session.</p>
+    </div>
+    <app-document-selector
+      [selectedDocumentIds]="selectedDocumentIds"
+      (selectionChange)="onDocumentSelectionChange($event)"
+    ></app-document-selector>
+  </div>
+
+  <div class="messages-container" #messagesContainer>
+    <div *ngIf="messages.length === 0 && !showDocumentSelector" class="empty-state">
+      <p>Start a conversation by asking a question.</p>
+    </div>
+
+    <div *ngFor="let message of messages" class="message-wrapper" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+      <div class="message-bubble" [class.user-bubble]="message.role === 'user'" [class.assistant-bubble]="message.role === 'assistant'">
+        <div class="message-text">{{ message.content }}</div>
+        <div *ngIf="message.role === 'assistant'" class="message-actions">
+          <!-- Thumbs Up Button - First position, only shown if no rating or if thumbs up is selected -->
+          <button 
+            *ngIf="shouldShowRatingButton(message.id, 'up')"
+            class="action-btn rating-btn" 
+            [class.active]="getMessageRating(message.id) === 'up'"
+            (click)="rateMessage(message.id, 'up')"
+            title="Thumbs up"
+          >
+            <!-- White fill with border when not selected -->
+            <svg *ngIf="getMessageRating(message.id) !== 'up'" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
+            </svg>
+            <!-- Filled with border color when selected (same as thumbs down) -->
+            <svg *ngIf="getMessageRating(message.id) === 'up'" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
+            </svg>
+          </button>
+          <!-- Thumbs Down Button - Third position, only shown if no rating or if thumbs down is selected -->
+          <button 
+            *ngIf="shouldShowRatingButton(message.id, 'down')"
+            class="action-btn rating-btn" 
+            [class.active]="getMessageRating(message.id) === 'down'"
+            (click)="rateMessage(message.id, 'down')"
+            title="Thumbs down"
+          >
+            <!-- White fill with border when not selected (same style as thumbs up) -->
+            <svg *ngIf="getMessageRating(message.id) !== 'down'" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+            </svg>
+            <!-- Filled with border color when selected (same as thumbs up) -->
+            <svg *ngIf="getMessageRating(message.id) === 'down'" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="loading" class="message-wrapper assistant">
+      <div class="message-bubble assistant-bubble">
+        <div class="loading-indicator">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-container">
+    <div class="input-wrapper">
+      <textarea
+        #messageInput
+        [(ngModel)]="question"
+        (keydown)="onKeyDown($event)"
+        [placeholder]="selectedDocumentIds.length === 0 ? 'Please select a RAG source first' : 'Type your message — Shift+Enter for newline'"
+        rows="1"
+        class="message-input"
+        [disabled]="loading || selectedDocumentIds.length === 0"
+      ></textarea>
+      <button
+        *ngIf="question.trim()"
+        class="send-button"
+        (click)="sendMessage()"
+        [disabled]="loading || selectedDocumentIds.length === 0"
+        [title]="selectedDocumentIds.length === 0 ? 'Please select a RAG source first' : 'Send message'"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 2L8 14M8 2L3 7M8 2L13 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+

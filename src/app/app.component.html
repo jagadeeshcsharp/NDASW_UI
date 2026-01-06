@@ -1,0 +1,21 @@
+<div class="app-container">
+  <header class="app-header">
+    <div class="header-content">
+      <h1 class="app-title">{{ title }}</h1>
+      <div class="auth-section">
+        <ng-container *ngIf="isAuthenticated; else loginTemplate">
+          <span class="user-name" *ngIf="userName">Welcome, {{ userName }}</span>
+          <button class="btn-logout" (click)="logout()">Logout</button>
+        </ng-container>
+        <ng-template #loginTemplate>
+          <button class="btn-login" (click)="login()">Login</button>
+        </ng-template>
+      </div>
+    </div>
+  </header>
+  <div class="main-content">
+    <app-session-list [collapsed]="sidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-session-list>
+    <app-chat [sidebarCollapsed]="sidebarCollapsed"></app-chat>
+  </div>
+</div>
+

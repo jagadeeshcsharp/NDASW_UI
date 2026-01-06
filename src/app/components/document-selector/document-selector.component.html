@@ -1,0 +1,37 @@
+<div class="document-selector">
+  <button class="selector-toggle" (click)="toggleSelector()">
+    <span class="text">Documents</span>
+    <span class="count" *ngIf="getSelectedCount() > 0">({{ getSelectedCount() }})</span>
+    <span class="arrow">{{ showSelector ? '▼' : '▶' }}</span>
+  </button>
+
+  <div class="selector-panel" *ngIf="showSelector">
+    <div class="panel-header">
+      <h3>Select RAG Source</h3>
+      <p class="selector-hint">Select one document as your RAG source</p>
+      <button class="refresh-btn" (click)="loadDocuments()" [disabled]="loading">
+        {{ loading ? 'Loading...' : 'Refresh' }}
+      </button>
+    </div>
+
+    <div class="documents-list" *ngIf="!loading && documents.length > 0">
+      <div
+        *ngFor="let doc of documents"
+        class="document-item"
+        [class.selected]="isSelected(doc.id)"
+        (click)="selectDocument(doc.id)"
+      >
+        <span class="doc-name">{{ doc.name }}</span>
+      </div>
+    </div>
+
+    <div class="empty-state" *ngIf="!loading && documents.length === 0">
+      No documents available
+    </div>
+
+    <div class="loading-state" *ngIf="loading">
+      Loading documents...
+    </div>
+  </div>
+</div>
+
