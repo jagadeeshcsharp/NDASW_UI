@@ -162,10 +162,6 @@
   background-color: #e8e8e8 !important;
 }
 
-.session-item:hover .delete-btn {
-  opacity: 1;
-}
-
 .session-item.active {
   background-color: #e8e8e8 !important;
 }
@@ -183,33 +179,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.4;
-}
-
-.delete-btn {
-  opacity: 0;
-  background: none;
-  border: none;
-  color: #6b6b6b;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: 6px;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-}
-
-.delete-btn:hover {
-  color: #1f1f1f;
-  background-color: #e0e0e0;
-}
-
-.delete-btn svg {
-  width: 14px;
-  height: 14px;
 }
 
 .bottom-section {

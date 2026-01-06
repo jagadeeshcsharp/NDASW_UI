@@ -37,13 +37,6 @@ export class SessionListComponent {
     this.sessionService.setCurrentSession(session);
   }
 
-  deleteSession(event: Event, sessionId: string): void {
-    event.stopPropagation();
-    if (confirm('Are you sure you want to delete this session?')) {
-      this.sessionService.deleteSession(sessionId);
-    }
-  }
-
   onToggleSidebar(): void {
     this.toggleSidebar.emit();
   }

@@ -25,12 +25,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   question = '';
   loading = false;
   selectedDocumentIds: string[] = [];
-  selectedRagSource: string = 'None';
-  ragSourceOptions: string[] = ['None'];
-  selectedRagSourceNames: string[] = []; // Display names for selected RAG sources
-  allDocuments: Document[] = []; // Cache all documents for name lookup
+  selectedRagSourceNames: string[] = [];
+  allDocuments: Document[] = [];
   messageRatings: Map<string, 'up' | 'down' | null> = new Map();
-  showDocumentSelector = false; // Show selector for new sessions
+  showDocumentSelector = false;
 
   private destroy$ = new Subject<void>();
 
@@ -43,8 +41,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.documentService.getMockDocuments().subscribe(documents => {
       this.allDocuments = documents;
-      const fileNames = documents.map(doc => doc.name);
-      this.ragSourceOptions = ['None', ...fileNames];
       this.updateRagSourceNames();
     });
 
@@ -60,7 +56,6 @@ export class ChatComponent implements OnInit, OnDestroy {
         if (session === null) {
           this.selectedDocumentIds = [];
           this.selectedRagSourceNames = [];
-          this.selectedRagSource = 'None';
           this.question = '';
           this.showDocumentSelector = true;
         } else {
@@ -74,13 +69,6 @@ export class ChatComponent implements OnInit, OnDestroy {
         }
         
         this.updateRagSourceNames();
-        
-        if (this.selectedDocumentIds.length > 0 && this.allDocuments.length > 0) {
-          const selectedDoc = this.allDocuments.find(doc => doc.id === this.selectedDocumentIds[0]);
-          this.selectedRagSource = selectedDoc?.name || 'None';
-        } else {
-          this.selectedRagSource = 'None';
-        }
         
         this.messageRatings.clear();
         this.messages.forEach(message => {
@@ -217,15 +205,6 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.selectedDocumentIds = [documentIds[0]];
     this.showDocumentSelector = false;
     this.updateRagSourceNames();
-    
-    if (this.allDocuments.length > 0) {
-      const selectedDoc = this.allDocuments.find(doc => doc.id === this.selectedDocumentIds[0]);
-      this.selectedRagSource = selectedDoc?.name || 'None';
-    }
-  }
-  
-  get isRagSourceRequired(): boolean {
-    return this.selectedDocumentIds.length === 0;
   }
 
   onKeyDown(event: KeyboardEvent): void {
