@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import { ChatSession, ChatMessage, Document } from '../models/chat.models';
 import { environment } from '../../environments/environment';
 
@@ -29,23 +29,12 @@ export interface MessageApiResponse {
 }
 
 export interface DocumentApiResponse {
-  documentId?: number;
-  DocumentId?: number;
-  fileName?: string;
-  FileName?: string;
-  fileExtension?: string;
-  FileExtension?: string;
-  isActive?: boolean | string;
-  IsActive?: boolean | string;
-  createdAt?: string;
-  CreatedAt?: string;
-  updatedAt?: string;
-  UpdatedAt?: string;
-}
-
-export interface DocumentsApiResponse {
-  value?: DocumentApiResponse[];
-  Count?: number;
+  documentId: string;
+  fileName: string;
+  fileExtension: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 @Injectable({
@@ -146,15 +135,27 @@ export class DatabaseService {
         return mappedSession;
       }),
       catchError(error => {
-        console.error('Error creating session:', error);
-        console.error('Error status:', error.status);
-        console.error('Error statusText:', error.statusText);
-        console.error('Error message:', error.message);
-        if (error.error) {
-          console.error('Error body:', JSON.stringify(error.error, null, 2));
-        }
-        if (error.url) {
-          console.error('Error URL:', error.url);
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const isDuplicateKey = error.status === 409 || 
+          errorMessage.includes('PRIMARY KEY constraint') || 
+          errorMessage.includes('duplicate key') ||
+          errorMessage.includes('already exists') ||
+          JSON.stringify(error.error || {}).toLowerCase().includes('primary key constraint') ||
+          JSON.stringify(error.error || {}).toLowerCase().includes('duplicate key');
+        
+        if (isDuplicateKey) {
+          console.log('ℹ️ Session already exists in database (duplicate key detected) - this is expected and will be handled gracefully');
+        } else {
+          console.error('❌ Error creating session:', error);
+          console.error('Error status:', error.status);
+          console.error('Error statusText:', error.statusText);
+          console.error('Error message:', errorMessage);
+          if (error.error) {
+            console.error('Error body:', JSON.stringify(error.error, null, 2));
+          }
+          if (error.url) {
+            console.error('Error URL:', error.url);
+          }
         }
         return throwError(() => error);
       })
@@ -230,100 +231,35 @@ export class DatabaseService {
     );
   }
 
-  getDocuments(userId?: string): Observable<Document[]> {
+  getDocuments(): Observable<Document[]> {
     if (!this.apiUrl) {
       console.warn('Database API URL not configured');
       return of([]);
     }
 
-    // Try with userId first, then without if it fails (documents might be shared)
-    const url = userId 
-      ? `${this.apiUrl}/documents/${encodeURIComponent(userId)}`
-      : `${this.apiUrl}/documents`;
+    const url = `${this.apiUrl}/documents`;
     console.log(`Fetching documents from: ${url}`);
     
-    return this.http.get<DocumentApiResponse[] | DocumentsApiResponse>(url, this.httpOptions).pipe(
+    return this.http.get<DocumentApiResponse[] | { value?: DocumentApiResponse[] }>(url, this.httpOptions).pipe(
       map(response => {
-        const documents = Array.isArray(response) ? response : (response as DocumentsApiResponse).value || [];
-        console.log(`Received ${documents.length} documents from API (raw):`, documents);
-        // Filter only active documents and map them
-        const activeDocuments = documents
-          .filter(d => {
-            const isActive = d.isActive !== undefined ? d.isActive : (d.IsActive !== undefined ? d.IsActive : true);
-            return this.parseBoolean(isActive);
-          })
-          .map(d => this.mapDocumentFromApi(d));
-        console.log(`Filtered to ${activeDocuments.length} active documents:`, activeDocuments);
-        return activeDocuments;
+        const documents = Array.isArray(response) ? response : (response as { value?: DocumentApiResponse[] }).value || [];
+        console.log(`Received ${documents.length} documents from API:`, documents);
+        return documents.map(d => this.mapDocumentFromApi(d));
       }),
       catchError(error => {
-        // If request with userId fails, try without userId (documents might be shared)
-        if (userId && (error.status === 404 || error.status === 400)) {
-          console.log(`Documents endpoint with userId failed (${error.status}), trying without userId`);
-          const sharedUrl = `${this.apiUrl}/documents`;
-          return this.http.get<DocumentApiResponse[] | DocumentsApiResponse>(sharedUrl, this.httpOptions).pipe(
-            map(response => {
-              const documents = Array.isArray(response) ? response : (response as DocumentsApiResponse).value || [];
-              console.log(`Received ${documents.length} shared documents from API (raw):`, documents);
-              const activeDocuments = documents
-                .filter(d => {
-                  const isActive = d.isActive !== undefined ? d.isActive : (d.IsActive !== undefined ? d.IsActive : true);
-                  return this.parseBoolean(isActive);
-                })
-                .map(d => this.mapDocumentFromApi(d));
-              console.log(`Filtered to ${activeDocuments.length} active shared documents:`, activeDocuments);
-              return activeDocuments;
-            }),
-            catchError(sharedError => {
-              console.error('Error fetching documents (both attempts failed):', sharedError);
-              console.error('Error details:', {
-                status: sharedError.status,
-                statusText: sharedError.statusText,
-                message: sharedError.message,
-                url: sharedUrl
-              });
-              return of([]);
-            })
-          );
-        }
         console.error('Error fetching documents:', error);
         console.error('Error details:', {
           status: error.status,
           statusText: error.statusText,
           message: error.message,
-          url: url,
-          error: error
+          url: url
         });
+        if (error.status === 404) {
+          console.warn('Documents endpoint not found (404). The endpoint may not be implemented yet on the backend.');
+        }
         return of([]);
       })
     );
-  }
-
-  private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
-    // Handle both camelCase and PascalCase from API
-    const documentId = apiDocument.documentId || apiDocument.DocumentId || 0;
-    const fileName = apiDocument.fileName || apiDocument.FileName || '';
-    const fileExtension = apiDocument.fileExtension || apiDocument.FileExtension || '';
-    const isActive = apiDocument.isActive !== undefined ? apiDocument.isActive : (apiDocument.IsActive !== undefined ? apiDocument.IsActive : true);
-    
-    // Combine fileName and fileExtension for the display name
-    const fullName = fileExtension 
-      ? `${fileName}.${fileExtension}`
-      : fileName;
-    
-    return {
-      id: documentId.toString(),
-      name: fullName,
-      type: fileExtension,
-      path: undefined // Path not available in database schema
-    };
-  }
-
-  private parseBoolean(value: boolean | string | undefined): boolean {
-    if (typeof value === 'string') {
-      return value.toLowerCase() === 'true';
-    }
-    return Boolean(value);
   }
 
   private mapSessionFromApi(apiSession: SessionApiResponse): ChatSession {
@@ -344,6 +280,18 @@ export class DatabaseService {
       content: apiMessage.content,
       timestamp: new Date(apiMessage.timestamp),
       rating: apiMessage.rating as 'up' | 'down' | undefined
+    };
+  }
+
+  private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
+    const fileName = apiDocument.fileName || '';
+    const fileExtension = apiDocument.fileExtension || '';
+    const fullName = fileExtension ? `${fileName}.${fileExtension}` : fileName;
+    
+    return {
+      id: apiDocument.documentId,
+      name: fullName,
+      type: fileExtension
     };
   }
 

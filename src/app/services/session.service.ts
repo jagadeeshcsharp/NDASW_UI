@@ -27,17 +27,9 @@ export class SessionService {
 
   private loadSessions(): void {
     const userId = this.authService.getUserId();
-    if (!userId) {
-      console.warn('Cannot load sessions: No authenticated user');
-      this.sessionsSubject.next([]);
-      return;
-    }
-    console.log(`Loading sessions from database for user: ${userId}`);
-    this.loadSessionsFromDatabase(userId);
-  }
-
-  reloadSessions(): void {
-    this.loadSessions();
+    const effectiveUserId = userId || 'user@example.com';
+    console.log(`Loading sessions from database for user: ${effectiveUserId}`);
+    this.loadSessionsFromDatabase(effectiveUserId);
   }
 
   private loadSessionsFromDatabase(userId: string): void {
@@ -97,20 +89,58 @@ export class SessionService {
     }
 
     const userId = this.authService.getUserId();
-    if (!userId) {
-      console.error('Cannot create session: No authenticated user');
-      return session;
-    }
+    const effectiveUserId = userId || 'user@example.com';
     
-    // Check if session is already being created
     if (this.pendingSessionCreations.has(sessionId)) {
-      console.warn(`Session ${sessionId} is already being created, skipping duplicate creation`);
+      console.log(`Session ${sessionId} is already being created - skipping duplicate creation`);
+      this.setCurrentSession(session);
       return session;
     }
     
     this.pendingSessionCreations.add(sessionId);
-    this.databaseService.createSession(userId, sessionId, session.title, selectedDocumentIds).subscribe({
-      next: (createdSession) => {
+    
+    this.databaseService.createSession(effectiveUserId, sessionId, session.title, selectedDocumentIds).pipe(
+      catchError(error => {
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const errorBody = error.error || {};
+        const fullErrorText = JSON.stringify(errorBody).toLowerCase();
+        
+        const isDuplicateKey = error.status === 409 || 
+            (error.status === 500 && (
+              errorMessage.includes('PRIMARY KEY constraint') || 
+              errorMessage.includes('duplicate key') ||
+              errorMessage.includes('already exists') ||
+              fullErrorText.includes('primary key constraint') ||
+              fullErrorText.includes('duplicate key') ||
+              fullErrorText.includes('cannot insert duplicate key')
+            ));
+        
+        if (isDuplicateKey) {
+          console.log(`ℹ️ Session ${sessionId} already exists - fetching from database instead of creating`);
+          return this.databaseService.getSessions(effectiveUserId).pipe(
+            switchMap(sessions => {
+              const existingSession = sessions.find(s => s.id === sessionId);
+              if (existingSession) {
+                return this.databaseService.getSessionMessages(sessionId).pipe(
+                  map(messages => {
+                    existingSession.messages = messages;
+                    return existingSession;
+                  })
+                );
+              } else {
+                return throwError(() => new Error('Session not found after duplicate error'));
+              }
+            }),
+            catchError(loadError => {
+              console.warn(`Could not load existing session ${sessionId}, using local session`);
+              return of(session);
+            })
+          );
+        }
+        return throwError(() => error);
+      })
+    ).subscribe({
+      next: (createdSession: ChatSession) => {
         this.pendingSessionCreations.delete(sessionId);
         const sessionWithDocs = {
           ...createdSession,
@@ -123,50 +153,128 @@ export class SessionService {
         this.sessionsSubject.next(updatedSessions);
         this.setCurrentSession(sessionWithDocs);
       },
-      error: (error) => {
+      error: (error: any) => {
         this.pendingSessionCreations.delete(sessionId);
-        const errorMessage = error.error?.message || '';
-        if (errorMessage.includes('PRIMARY KEY constraint') || 
-            errorMessage.includes('duplicate key') ||
-            errorMessage.includes('already exists')) {
-          console.warn(`Session ${sessionId} already exists in database - fetching existing session`);
-          // Session already exists, try to fetch it from the database
-          this.databaseService.getSessions(userId).subscribe({
-            next: (allSessions) => {
-              const existingSession = allSessions.find(s => s.id === sessionId);
-              if (existingSession) {
-                const sessionWithDocs = {
-                  ...existingSession,
-                  selectedDocumentIds: selectedDocumentIds || existingSession.selectedDocumentIds || []
-                };
-                const currentSessions = this.sessionsSubject.value;
-                const updatedSessions = currentSessions.map(s => 
-                  s.id === sessionId ? sessionWithDocs : s
-                );
-                // Make sure the session is in the list
-                if (!updatedSessions.some(s => s.id === sessionId)) {
-                  updatedSessions.unshift(sessionWithDocs);
-                }
-                this.sessionsSubject.next(updatedSessions);
-                this.setCurrentSession(sessionWithDocs);
-              } else {
-                console.error(`Could not find existing session ${sessionId} in database`);
-                this.setCurrentSession(session);
-              }
-            },
-            error: (fetchError) => {
-              console.error('Error fetching existing session:', fetchError);
-              this.setCurrentSession(session);
-            }
-          });
-        } else {
-          console.error('Error creating session in database:', error);
-          this.setCurrentSession(session);
-        }
+        console.error('❌ Unexpected error creating session:', error);
+        console.error('Error details:', {
+          status: error.status,
+          statusText: error.statusText,
+          message: error.error?.message || error.message
+        });
+        this.setCurrentSession(session);
       }
     });
     this.setCurrentSession(session);
     return session;
+  }
+
+  createSessionAndWait(title?: string, selectedDocumentIds?: string[]): Observable<ChatSession> {
+    const sessionId = this.generateId();
+    const session: ChatSession = {
+      id: sessionId,
+      title: title || 'New Chat',
+      messages: [],
+      selectedDocumentIds: selectedDocumentIds || [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const sessions = this.sessionsSubject.value;
+    if (!sessions.some(s => s.id === sessionId)) {
+      this.sessionsSubject.next([session, ...sessions]);
+    }
+
+    const userId = this.authService.getUserId();
+    const effectiveUserId = userId || 'user@example.com';
+    
+    if (this.pendingSessionCreations.has(sessionId)) {
+      console.log(`Session ${sessionId} is already being created - waiting for it`);
+      return new Observable(observer => {
+        const maxWaitTime = 5000;
+        const startTime = Date.now();
+        const checkInterval = setInterval(() => {
+          if (!this.pendingSessionCreations.has(sessionId)) {
+            clearInterval(checkInterval);
+            const existingSession = this.sessionsSubject.value.find(s => s.id === sessionId);
+            if (existingSession) {
+              observer.next(existingSession);
+              observer.complete();
+            } else {
+              observer.next(session);
+              observer.complete();
+            }
+          } else if (Date.now() - startTime > maxWaitTime) {
+            clearInterval(checkInterval);
+            observer.next(session);
+            observer.complete();
+          }
+        }, 100);
+      });
+    }
+    
+    this.pendingSessionCreations.add(sessionId);
+    this.setCurrentSession(session);
+    
+    return this.databaseService.createSession(effectiveUserId, sessionId, session.title, selectedDocumentIds).pipe(
+      catchError(error => {
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const errorBody = error.error || {};
+        const fullErrorText = JSON.stringify(errorBody).toLowerCase();
+        
+        const isDuplicateKey = error.status === 409 || 
+            (error.status === 500 && (
+              errorMessage.includes('PRIMARY KEY constraint') || 
+              errorMessage.includes('duplicate key') ||
+              errorMessage.includes('already exists') ||
+              fullErrorText.includes('primary key constraint') ||
+              fullErrorText.includes('duplicate key') ||
+              fullErrorText.includes('cannot insert duplicate key')
+            ));
+        
+        if (isDuplicateKey) {
+          console.log(`ℹ️ Session ${sessionId} already exists - fetching from database instead`);
+          return this.databaseService.getSessions(effectiveUserId).pipe(
+            switchMap(sessions => {
+              const existingSession = sessions.find(s => s.id === sessionId);
+              if (existingSession) {
+                return this.databaseService.getSessionMessages(sessionId).pipe(
+                  map(messages => {
+                    existingSession.messages = messages;
+                    this.messagesCache.set(sessionId, messages);
+                    return existingSession;
+                  })
+                );
+              } else {
+                console.warn(`Session ${sessionId} not found after duplicate error - using local session`);
+                return of(session);
+              }
+            }),
+            catchError(loadError => {
+              console.warn(`Error loading existing session ${sessionId}, using local session:`, loadError);
+              return of(session);
+            })
+          );
+        }
+        return throwError(() => error);
+      }),
+      tap(createdOrExistingSession => {
+        this.pendingSessionCreations.delete(sessionId);
+        const sessionWithDocs = {
+          ...createdOrExistingSession,
+          selectedDocumentIds: selectedDocumentIds || []
+        };
+        const currentSessions = this.sessionsSubject.value;
+        const updatedSessions = currentSessions.map(s => 
+          s.id === sessionId ? sessionWithDocs : s
+        );
+        if (!updatedSessions.some(s => s.id === sessionId)) {
+          this.sessionsSubject.next([sessionWithDocs, ...currentSessions]);
+        } else {
+          this.sessionsSubject.next(updatedSessions);
+        }
+        this.setCurrentSession(sessionWithDocs);
+      })
+    );
   }
 
   private ensureSessionExists(session: ChatSession): Observable<ChatSession> {
@@ -190,44 +298,57 @@ export class SessionService {
     }
 
     const userId = this.authService.getUserId();
-    if (!userId) {
-      console.error('Cannot create session: No authenticated user');
-      return new Observable(observer => {
-        observer.error(new Error('No authenticated user'));
-        observer.complete();
-      });
-    }
-    this.pendingSessionCreations.add(session.id);
+    const effectiveUserId = userId || 'user@example.com';
     
-    return this.databaseService.createSession(
-      userId,
-      session.id,
-      session.title,
-      session.selectedDocumentIds
-    ).pipe(
-      map(createdSession => {
-        this.pendingSessionCreations.delete(session.id);
-        return {
-          ...createdSession,
-          selectedDocumentIds: session.selectedDocumentIds || []
-        };
+    return this.databaseService.getSessions(effectiveUserId).pipe(
+      switchMap(sessions => {
+        const existingSession = sessions.find(s => s.id === session.id);
+        if (existingSession) {
+          console.log(`Session ${session.id} already exists in database - skipping creation`);
+          return of(existingSession);
+        }
+        
+        this.pendingSessionCreations.add(session.id);
+        return this.databaseService.createSession(
+          effectiveUserId,
+          session.id,
+          session.title,
+          session.selectedDocumentIds
+        ).pipe(
+          map(createdSession => {
+            this.pendingSessionCreations.delete(session.id);
+            return {
+              ...createdSession,
+              selectedDocumentIds: session.selectedDocumentIds || []
+            };
+          }),
+          catchError(error => {
+            this.pendingSessionCreations.delete(session.id);
+            const errorMessage = error.error?.message || error.error?.error || error.message || '';
+            const errorBody = error.error || {};
+            const fullErrorText = JSON.stringify(errorBody).toLowerCase();
+            
+            if (error.status === 409 || 
+                error.status === 500 && (errorMessage.includes('already exists') || 
+                errorMessage.includes('PRIMARY KEY constraint') ||
+                errorMessage.includes('duplicate key') ||
+                fullErrorText.includes('primary key constraint') ||
+                fullErrorText.includes('duplicate key'))) {
+              console.log(`Session ${session.id} already exists in database (detected via error)`);
+              return of(session);
+            }
+            console.error('Error ensuring session exists:', error);
+            if (errorMessage.includes('too many arguments')) {
+              console.error('Backend stored procedure error - session creation failed');
+              return throwError(() => new Error('Session creation failed: Backend stored procedure error'));
+            }
+            return throwError(() => error);
+          })
+        );
       }),
       catchError(error => {
-        this.pendingSessionCreations.delete(session.id);
-        const errorMessage = error.error?.message || '';
-        if (error.status === 409 || 
-            errorMessage.includes('already exists') || 
-            errorMessage.includes('PRIMARY KEY constraint') ||
-            errorMessage.includes('duplicate key')) {
-          console.log(`Session ${session.id} already exists in database`);
-          return of(session);
-        }
-        console.error('Error ensuring session exists:', error);
-        if (errorMessage.includes('too many arguments')) {
-          console.error('Backend stored procedure error - session creation failed');
-          return throwError(() => new Error('Session creation failed: Backend stored procedure error'));
-        }
-        return throwError(() => error);
+        console.error('Error checking if session exists:', error);
+        return of(session);
       })
     );
   }
@@ -496,13 +617,7 @@ export class SessionService {
     }
   }
 
-  private static idCounter = 0;
-  
   private generateId(): string {
-    SessionService.idCounter = (SessionService.idCounter + 1) % 10000;
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 11);
-    const counter = SessionService.idCounter.toString().padStart(4, '0');
-    return `${timestamp}-${random}-${counter}`;
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 }

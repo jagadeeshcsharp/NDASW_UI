@@ -1,8 +1,8 @@
 import { Configuration, BrowserCacheLocation } from '@azure/msal-browser';
 
 export const environment = {
-  n8nChatWebhookUrl: 'http://localhost:5678/webhook/ea86c866-b87d-4d31-9d12-4553bb39e08a',
-  dotnetapi: 'https://appservicenda-cgejb3esfehgebfy.canadacentral-01.azurewebsites.net/api/database'
+  n8nChatWebhookUrl: 'http://localhost:5678/webhook/1443b0df-722f-462e-8c12-4b85babc393e',
+  dotnetapi: 'http://localhost:5000/api/database'
 };
 
 export const msalConfig: Configuration = {

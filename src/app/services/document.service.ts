@@ -11,14 +11,8 @@ export class DocumentService {
 
   constructor() {}
 
-  getDocuments(): Observable<Document[]> {
-    return this.databaseService.getDocuments();
-  }
-
-  // Keep this method for backward compatibility but mark as deprecated
-  /** @deprecated Use getDocuments() instead */
   getMockDocuments(): Observable<Document[]> {
-    return this.getDocuments();
+    return this.databaseService.getDocuments();
   }
 }
 
