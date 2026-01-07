@@ -76,6 +76,11 @@ export class DatabaseService {
           message: error.message,
           url: url
         });
+        // Re-throw authorization errors (401, 403) so they can be handled by the caller
+        if (error.status === 401 || error.status === 403) {
+          return throwError(() => error);
+        }
+        // For other errors, return empty array
         return of([]);
       })
     );

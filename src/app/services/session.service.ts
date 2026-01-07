@@ -26,10 +26,18 @@ export class SessionService {
   }
 
   private loadSessions(): void {
-    const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
-    console.log(`Loading sessions from database for user: ${effectiveUserId}`);
-    this.loadSessionsFromDatabase(effectiveUserId);
+    const userEmail = this.authService.getUserEmail();
+    if (!userEmail) {
+      console.warn('No user email available, cannot load sessions');
+      this.sessionsSubject.next([]);
+      return;
+    }
+    console.log(`Loading sessions from database for user: ${userEmail}`);
+    this.loadSessionsFromDatabase(userEmail);
+  }
+
+  reloadSessions(): void {
+    this.loadSessions();
   }
 
   private loadSessionsFromDatabase(userId: string): void {
@@ -67,6 +75,13 @@ export class SessionService {
       },
       error: (error) => {
         console.error('Error loading sessions from database:', error);
+        // Check for authorization errors (401 Unauthorized, 403 Forbidden)
+        if (error.status === 401 || error.status === 403) {
+          console.warn('User is not authorized to access this application');
+          // Authorization error will be handled by app component
+          // Don't set empty sessions, let the error propagate
+          return;
+        }
         this.sessionsSubject.next([]);
       }
     });
@@ -88,8 +103,12 @@ export class SessionService {
       this.sessionsSubject.next([session, ...sessions]);
     }
 
-    const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
+    const userEmail = this.authService.getUserEmail();
+    if (!userEmail) {
+      console.error('No user email available, cannot create session');
+      this.setCurrentSession(session);
+      return session;
+    }
     
     if (this.pendingSessionCreations.has(sessionId)) {
       console.log(`Session ${sessionId} is already being created - skipping duplicate creation`);
@@ -99,7 +118,7 @@ export class SessionService {
     
     this.pendingSessionCreations.add(sessionId);
     
-    this.databaseService.createSession(effectiveUserId, sessionId, session.title, selectedDocumentIds).pipe(
+    this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds).pipe(
       catchError(error => {
         const errorMessage = error.error?.message || error.error?.error || error.message || '';
         const errorBody = error.error || {};
@@ -117,7 +136,7 @@ export class SessionService {
         
         if (isDuplicateKey) {
           console.log(`ℹ️ Session ${sessionId} already exists - fetching from database instead of creating`);
-          return this.databaseService.getSessions(effectiveUserId).pipe(
+          return this.databaseService.getSessions(userEmail).pipe(
             switchMap(sessions => {
               const existingSession = sessions.find(s => s.id === sessionId);
               if (existingSession) {
@@ -155,12 +174,18 @@ export class SessionService {
       },
       error: (error: any) => {
         this.pendingSessionCreations.delete(sessionId);
-        console.error('❌ Unexpected error creating session:', error);
-        console.error('Error details:', {
-          status: error.status,
-          statusText: error.statusText,
-          message: error.error?.message || error.message
-        });
+        // Check for authorization errors
+        if (error.status === 401 || error.status === 403) {
+          console.warn('User is not authorized to create sessions');
+          // Authorization error will be handled by app component
+        } else {
+          console.error('❌ Unexpected error creating session:', error);
+          console.error('Error details:', {
+            status: error.status,
+            statusText: error.statusText,
+            message: error.error?.message || error.message
+          });
+        }
         this.setCurrentSession(session);
       }
     });
@@ -184,8 +209,11 @@ export class SessionService {
       this.sessionsSubject.next([session, ...sessions]);
     }
 
-    const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
+    const userEmail = this.authService.getUserEmail();
+    if (!userEmail) {
+      console.error('No user email available, cannot create session');
+      return throwError(() => new Error('No user email available'));
+    }
     
     if (this.pendingSessionCreations.has(sessionId)) {
       console.log(`Session ${sessionId} is already being created - waiting for it`);
@@ -215,7 +243,7 @@ export class SessionService {
     this.pendingSessionCreations.add(sessionId);
     this.setCurrentSession(session);
     
-    return this.databaseService.createSession(effectiveUserId, sessionId, session.title, selectedDocumentIds).pipe(
+    return this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds).pipe(
       catchError(error => {
         const errorMessage = error.error?.message || error.error?.error || error.message || '';
         const errorBody = error.error || {};
@@ -233,7 +261,7 @@ export class SessionService {
         
         if (isDuplicateKey) {
           console.log(`ℹ️ Session ${sessionId} already exists - fetching from database instead`);
-          return this.databaseService.getSessions(effectiveUserId).pipe(
+          return this.databaseService.getSessions(userEmail).pipe(
             switchMap(sessions => {
               const existingSession = sessions.find(s => s.id === sessionId);
               if (existingSession) {
@@ -297,10 +325,13 @@ export class SessionService {
       });
     }
 
-    const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
+    const userEmail = this.authService.getUserEmail();
+    if (!userEmail) {
+      console.error('No user email available, cannot ensure session exists');
+      return of(session);
+    }
     
-    return this.databaseService.getSessions(effectiveUserId).pipe(
+    return this.databaseService.getSessions(userEmail).pipe(
       switchMap(sessions => {
         const existingSession = sessions.find(s => s.id === session.id);
         if (existingSession) {
@@ -310,7 +341,7 @@ export class SessionService {
         
         this.pendingSessionCreations.add(session.id);
         return this.databaseService.createSession(
-          effectiveUserId,
+          userEmail,
           session.id,
           session.title,
           session.selectedDocumentIds
