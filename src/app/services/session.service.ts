@@ -107,14 +107,26 @@ export class SessionService {
       },
       error: (error) => {
         this.pendingSessionCreations.delete(sessionId);
-        const errorMessage = error.error?.message || '';
-        if (errorMessage.includes('PRIMARY KEY constraint') || 
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const errorBody = error.error || {};
+        const fullErrorText = JSON.stringify(errorBody).toLowerCase();
+        
+        if (error.status === 409 || 
+            errorMessage.includes('PRIMARY KEY constraint') || 
             errorMessage.includes('duplicate key') ||
-            errorMessage.includes('already exists')) {
+            errorMessage.includes('already exists') ||
+            fullErrorText.includes('primary key constraint') ||
+            fullErrorText.includes('duplicate key')) {
           console.log(`Session ${sessionId} already exists in database - continuing`);
           this.setCurrentSession(session);
         } else {
           console.error('Error creating session in database:', error);
+          console.error('Error details:', {
+            status: error.status,
+            statusText: error.statusText,
+            message: errorMessage,
+            errorBody: errorBody
+          });
           this.setCurrentSession(session);
         }
       }
@@ -162,11 +174,16 @@ export class SessionService {
       }),
       catchError(error => {
         this.pendingSessionCreations.delete(session.id);
-        const errorMessage = error.error?.message || '';
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const errorBody = error.error || {};
+        const fullErrorText = JSON.stringify(errorBody).toLowerCase();
+        
         if (error.status === 409 || 
-            errorMessage.includes('already exists') || 
+            error.status === 500 && (errorMessage.includes('already exists') || 
             errorMessage.includes('PRIMARY KEY constraint') ||
-            errorMessage.includes('duplicate key')) {
+            errorMessage.includes('duplicate key') ||
+            fullErrorText.includes('primary key constraint') ||
+            fullErrorText.includes('duplicate key'))) {
           console.log(`Session ${session.id} already exists in database`);
           return of(session);
         }

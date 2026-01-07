@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
-import { ChatSession, ChatMessage } from '../models/chat.models';
+import { ChatSession, ChatMessage, Document } from '../models/chat.models';
 import { environment } from '../../environments/environment';
 
 export interface SessionApiResponse {
@@ -26,6 +26,15 @@ export interface MessageApiResponse {
   content: string;
   rating: string | null;
   timestamp: string;
+}
+
+export interface DocumentApiResponse {
+  documentId: string;
+  fileName: string;
+  fileExtension: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 @Injectable({
@@ -210,6 +219,37 @@ export class DatabaseService {
     );
   }
 
+  getDocuments(): Observable<Document[]> {
+    if (!this.apiUrl) {
+      console.warn('Database API URL not configured');
+      return of([]);
+    }
+
+    const url = `${this.apiUrl}/documents`;
+    console.log(`Fetching documents from: ${url}`);
+    
+    return this.http.get<DocumentApiResponse[] | { value?: DocumentApiResponse[] }>(url, this.httpOptions).pipe(
+      map(response => {
+        const documents = Array.isArray(response) ? response : (response as { value?: DocumentApiResponse[] }).value || [];
+        console.log(`Received ${documents.length} documents from API:`, documents);
+        return documents.map(d => this.mapDocumentFromApi(d));
+      }),
+      catchError(error => {
+        console.error('Error fetching documents:', error);
+        console.error('Error details:', {
+          status: error.status,
+          statusText: error.statusText,
+          message: error.message,
+          url: url
+        });
+        if (error.status === 404) {
+          console.warn('Documents endpoint not found (404). The endpoint may not be implemented yet on the backend.');
+        }
+        return of([]);
+      })
+    );
+  }
+
   private mapSessionFromApi(apiSession: SessionApiResponse): ChatSession {
     return {
       id: apiSession.sessionId,
@@ -228,6 +268,18 @@ export class DatabaseService {
       content: apiMessage.content,
       timestamp: new Date(apiMessage.timestamp),
       rating: apiMessage.rating as 'up' | 'down' | undefined
+    };
+  }
+
+  private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
+    const fileName = apiDocument.fileName || '';
+    const fileExtension = apiDocument.fileExtension || '';
+    const fullName = fileExtension ? `${fileName}.${fileExtension}` : fileName;
+    
+    return {
+      id: apiDocument.documentId,
+      name: fullName,
+      type: fileExtension
     };
   }
 
