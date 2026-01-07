@@ -6,6 +6,7 @@ import { SessionService } from './services/session.service';
 import { AuthService } from './services/auth.service';
 import { Subject, takeUntil } from 'rxjs';
 import { take } from 'rxjs/operators';
+import { AuthenticationResult } from '@azure/msal-browser';
 
 @Component({
   selector: 'app-root',
@@ -18,7 +19,10 @@ export class AppComponent implements OnInit, OnDestroy {
   title = 'NDASW Chatbot';
   sidebarCollapsed = false;
   isAuthenticated = false;
+  hasAccess = false;
+  isCheckingAccess = true;
   userName: string | null = null;
+  userEmail: string | null = null;
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -27,11 +31,44 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // First, handle redirect response if returning from authentication
+    this.isCheckingAccess = true;
+    this.authService.handleRedirectResponse().subscribe({
+      next: (redirectResponse: AuthenticationResult | null) => {
+        // Check initial authentication state (after redirect processing)
+        this.isAuthenticated = this.authService.isAuthenticated();
+        if (this.isAuthenticated) {
+          this.userName = this.authService.getUserName();
+          this.userEmail = this.authService.getUserEmail();
+          this.checkAccess();
+          this.isCheckingAccess = false;
+        } else {
+          // No redirect response or not authenticated, try auto-login
+          this.autoLogin();
+        }
+      },
+      error: (error: any) => {
+        console.error('Error processing redirect response:', error);
+        // Still try to check authentication state
+        this.isAuthenticated = this.authService.isAuthenticated();
+        if (this.isAuthenticated) {
+          this.userName = this.authService.getUserName();
+          this.userEmail = this.authService.getUserEmail();
+          this.checkAccess();
+        } else {
+          this.autoLogin();
+        }
+        this.isCheckingAccess = false;
+      }
+    });
+
     this.authService.authState$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isAuthenticated => {
         this.isAuthenticated = isAuthenticated;
         this.userName = this.authService.getUserName();
+        this.userEmail = this.authService.getUserEmail();
+        this.checkAccess();
       });
 
     const savedState = localStorage.getItem('sidebarCollapsed');
@@ -77,23 +114,38 @@ export class AppComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
-  login(): void {
-    this.authService.login().subscribe({
+  autoLogin(): void {
+    this.isCheckingAccess = true;
+    this.authService.autoLogin().subscribe({
       next: (result) => {
-        console.log('Login successful', result);
+        console.log('Auto-login successful', result);
         this.isAuthenticated = true;
         this.userName = this.authService.getUserName();
+        this.userEmail = this.authService.getUserEmail();
+        this.checkAccess();
+        this.isCheckingAccess = false;
       },
       error: (error) => {
-        console.error('Login failed', error);
+        console.error('Auto-login failed', error);
+        this.isAuthenticated = false;
+        this.hasAccess = false;
+        this.isCheckingAccess = false;
       }
     });
   }
 
-  logout(): void {
-    this.authService.logout();
-    this.isAuthenticated = false;
-    this.userName = null;
+  checkAccess(): void {
+    const previousAccess = this.hasAccess;
+    if (this.isAuthenticated) {
+      // User is authorized if they have account info (email)
+      this.hasAccess = this.authService.hasAccountInfo();
+      // Reload sessions when access is granted (changed from false to true)
+      if (this.hasAccess && !previousAccess) {
+        this.sessionService.reloadSessions();
+      }
+    } else {
+      this.hasAccess = false;
+    }
   }
 
   toggleSidebar(): void {

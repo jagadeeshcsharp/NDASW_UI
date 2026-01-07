@@ -39,7 +39,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.documentService.getMockDocuments().subscribe(documents => {
+    this.documentService.getDocuments().subscribe(documents => {
       this.allDocuments = documents;
       this.updateRagSourceNames();
     });

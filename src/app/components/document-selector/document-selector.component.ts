@@ -26,7 +26,7 @@ export class DocumentSelectorComponent implements OnInit {
 
   loadDocuments(): void {
     this.loading = true;
-    this.documentService.getMockDocuments().subscribe({
+    this.documentService.getDocuments().subscribe({
       next: (docs) => {
         this.documents = docs;
         this.loading = false;

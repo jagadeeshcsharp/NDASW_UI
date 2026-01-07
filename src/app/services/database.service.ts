@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
-import { ChatSession, ChatMessage } from '../models/chat.models';
+import { catchError, map, switchMap } from 'rxjs/operators';
+import { ChatSession, ChatMessage, Document } from '../models/chat.models';
 import { environment } from '../../environments/environment';
 
 export interface SessionApiResponse {
@@ -26,6 +26,26 @@ export interface MessageApiResponse {
   content: string;
   rating: string | null;
   timestamp: string;
+}
+
+export interface DocumentApiResponse {
+  documentId?: number;
+  DocumentId?: number;
+  fileName?: string;
+  FileName?: string;
+  fileExtension?: string;
+  FileExtension?: string;
+  isActive?: boolean | string;
+  IsActive?: boolean | string;
+  createdAt?: string;
+  CreatedAt?: string;
+  updatedAt?: string;
+  UpdatedAt?: string;
+}
+
+export interface DocumentsApiResponse {
+  value?: DocumentApiResponse[];
+  Count?: number;
 }
 
 @Injectable({
@@ -208,6 +228,102 @@ export class DatabaseService {
         return throwError(() => error);
       })
     );
+  }
+
+  getDocuments(userId?: string): Observable<Document[]> {
+    if (!this.apiUrl) {
+      console.warn('Database API URL not configured');
+      return of([]);
+    }
+
+    // Try with userId first, then without if it fails (documents might be shared)
+    const url = userId 
+      ? `${this.apiUrl}/documents/${encodeURIComponent(userId)}`
+      : `${this.apiUrl}/documents`;
+    console.log(`Fetching documents from: ${url}`);
+    
+    return this.http.get<DocumentApiResponse[] | DocumentsApiResponse>(url, this.httpOptions).pipe(
+      map(response => {
+        const documents = Array.isArray(response) ? response : (response as DocumentsApiResponse).value || [];
+        console.log(`Received ${documents.length} documents from API (raw):`, documents);
+        // Filter only active documents and map them
+        const activeDocuments = documents
+          .filter(d => {
+            const isActive = d.isActive !== undefined ? d.isActive : (d.IsActive !== undefined ? d.IsActive : true);
+            return this.parseBoolean(isActive);
+          })
+          .map(d => this.mapDocumentFromApi(d));
+        console.log(`Filtered to ${activeDocuments.length} active documents:`, activeDocuments);
+        return activeDocuments;
+      }),
+      catchError(error => {
+        // If request with userId fails, try without userId (documents might be shared)
+        if (userId && (error.status === 404 || error.status === 400)) {
+          console.log(`Documents endpoint with userId failed (${error.status}), trying without userId`);
+          const sharedUrl = `${this.apiUrl}/documents`;
+          return this.http.get<DocumentApiResponse[] | DocumentsApiResponse>(sharedUrl, this.httpOptions).pipe(
+            map(response => {
+              const documents = Array.isArray(response) ? response : (response as DocumentsApiResponse).value || [];
+              console.log(`Received ${documents.length} shared documents from API (raw):`, documents);
+              const activeDocuments = documents
+                .filter(d => {
+                  const isActive = d.isActive !== undefined ? d.isActive : (d.IsActive !== undefined ? d.IsActive : true);
+                  return this.parseBoolean(isActive);
+                })
+                .map(d => this.mapDocumentFromApi(d));
+              console.log(`Filtered to ${activeDocuments.length} active shared documents:`, activeDocuments);
+              return activeDocuments;
+            }),
+            catchError(sharedError => {
+              console.error('Error fetching documents (both attempts failed):', sharedError);
+              console.error('Error details:', {
+                status: sharedError.status,
+                statusText: sharedError.statusText,
+                message: sharedError.message,
+                url: sharedUrl
+              });
+              return of([]);
+            })
+          );
+        }
+        console.error('Error fetching documents:', error);
+        console.error('Error details:', {
+          status: error.status,
+          statusText: error.statusText,
+          message: error.message,
+          url: url,
+          error: error
+        });
+        return of([]);
+      })
+    );
+  }
+
+  private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
+    // Handle both camelCase and PascalCase from API
+    const documentId = apiDocument.documentId || apiDocument.DocumentId || 0;
+    const fileName = apiDocument.fileName || apiDocument.FileName || '';
+    const fileExtension = apiDocument.fileExtension || apiDocument.FileExtension || '';
+    const isActive = apiDocument.isActive !== undefined ? apiDocument.isActive : (apiDocument.IsActive !== undefined ? apiDocument.IsActive : true);
+    
+    // Combine fileName and fileExtension for the display name
+    const fullName = fileExtension 
+      ? `${fileName}.${fileExtension}`
+      : fileName;
+    
+    return {
+      id: documentId.toString(),
+      name: fullName,
+      type: fileExtension,
+      path: undefined // Path not available in database schema
+    };
+  }
+
+  private parseBoolean(value: boolean | string | undefined): boolean {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
   }
 
   private mapSessionFromApi(apiSession: SessionApiResponse): ChatSession {

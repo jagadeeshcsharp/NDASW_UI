@@ -27,9 +27,17 @@ export class SessionService {
 
   private loadSessions(): void {
     const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
-    console.log(`Loading sessions from database for user: ${effectiveUserId}`);
-    this.loadSessionsFromDatabase(effectiveUserId);
+    if (!userId) {
+      console.warn('Cannot load sessions: No authenticated user');
+      this.sessionsSubject.next([]);
+      return;
+    }
+    console.log(`Loading sessions from database for user: ${userId}`);
+    this.loadSessionsFromDatabase(userId);
+  }
+
+  reloadSessions(): void {
+    this.loadSessions();
   }
 
   private loadSessionsFromDatabase(userId: string): void {
@@ -89,9 +97,19 @@ export class SessionService {
     }
 
     const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
+    if (!userId) {
+      console.error('Cannot create session: No authenticated user');
+      return session;
+    }
+    
+    // Check if session is already being created
+    if (this.pendingSessionCreations.has(sessionId)) {
+      console.warn(`Session ${sessionId} is already being created, skipping duplicate creation`);
+      return session;
+    }
+    
     this.pendingSessionCreations.add(sessionId);
-    this.databaseService.createSession(effectiveUserId, sessionId, session.title, selectedDocumentIds).subscribe({
+    this.databaseService.createSession(userId, sessionId, session.title, selectedDocumentIds).subscribe({
       next: (createdSession) => {
         this.pendingSessionCreations.delete(sessionId);
         const sessionWithDocs = {
@@ -111,8 +129,36 @@ export class SessionService {
         if (errorMessage.includes('PRIMARY KEY constraint') || 
             errorMessage.includes('duplicate key') ||
             errorMessage.includes('already exists')) {
-          console.log(`Session ${sessionId} already exists in database - continuing`);
-          this.setCurrentSession(session);
+          console.warn(`Session ${sessionId} already exists in database - fetching existing session`);
+          // Session already exists, try to fetch it from the database
+          this.databaseService.getSessions(userId).subscribe({
+            next: (allSessions) => {
+              const existingSession = allSessions.find(s => s.id === sessionId);
+              if (existingSession) {
+                const sessionWithDocs = {
+                  ...existingSession,
+                  selectedDocumentIds: selectedDocumentIds || existingSession.selectedDocumentIds || []
+                };
+                const currentSessions = this.sessionsSubject.value;
+                const updatedSessions = currentSessions.map(s => 
+                  s.id === sessionId ? sessionWithDocs : s
+                );
+                // Make sure the session is in the list
+                if (!updatedSessions.some(s => s.id === sessionId)) {
+                  updatedSessions.unshift(sessionWithDocs);
+                }
+                this.sessionsSubject.next(updatedSessions);
+                this.setCurrentSession(sessionWithDocs);
+              } else {
+                console.error(`Could not find existing session ${sessionId} in database`);
+                this.setCurrentSession(session);
+              }
+            },
+            error: (fetchError) => {
+              console.error('Error fetching existing session:', fetchError);
+              this.setCurrentSession(session);
+            }
+          });
         } else {
           console.error('Error creating session in database:', error);
           this.setCurrentSession(session);
@@ -144,11 +190,17 @@ export class SessionService {
     }
 
     const userId = this.authService.getUserId();
-    const effectiveUserId = userId || 'user@example.com';
+    if (!userId) {
+      console.error('Cannot create session: No authenticated user');
+      return new Observable(observer => {
+        observer.error(new Error('No authenticated user'));
+        observer.complete();
+      });
+    }
     this.pendingSessionCreations.add(session.id);
     
     return this.databaseService.createSession(
-      effectiveUserId,
+      userId,
       session.id,
       session.title,
       session.selectedDocumentIds
@@ -444,7 +496,13 @@ export class SessionService {
     }
   }
 
+  private static idCounter = 0;
+  
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    SessionService.idCounter = (SessionService.idCounter + 1) % 10000;
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 11);
+    const counter = SessionService.idCounter.toString().padStart(4, '0');
+    return `${timestamp}-${random}-${counter}`;
   }
 }
