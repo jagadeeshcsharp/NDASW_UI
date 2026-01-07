@@ -121,12 +121,24 @@ export class ChatComponent implements OnInit, OnDestroy {
     let sessionToUse = this.currentSession;
     if (!sessionToUse) {
       const sessionTitle = questionText.length > 50 ? questionText.substring(0, 50) + '...' : questionText;
-      sessionToUse = this.sessionService.createSession(sessionTitle, this.selectedDocumentIds);
       this.showDocumentSelector = false;
-    }
-
-    if (!sessionToUse) {
-      console.error('Failed to create or get session');
+      this.loading = true;
+      
+      this.sessionService.createSessionAndWait(sessionTitle, this.selectedDocumentIds).subscribe({
+        next: (createdSession) => {
+          sessionToUse = createdSession;
+          const userMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
+            role: 'user',
+            content: questionText
+          };
+          this.sessionService.addMessage(createdSession.id, userMessage);
+          this.sendChatRequest(createdSession, questionText);
+        },
+        error: (error) => {
+          console.error('Failed to create session:', error);
+          this.loading = false;
+        }
+      });
       return;
     }
 
@@ -136,6 +148,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     };
 
     this.sessionService.addMessage(sessionToUse.id, userMessage);
+    this.sendChatRequest(sessionToUse, questionText);
+  }
+
+  private sendChatRequest(sessionToUse: ChatSession, questionText: string): void {
     this.question = '';
     this.loading = true;
 

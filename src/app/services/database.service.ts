@@ -135,15 +135,27 @@ export class DatabaseService {
         return mappedSession;
       }),
       catchError(error => {
-        console.error('Error creating session:', error);
-        console.error('Error status:', error.status);
-        console.error('Error statusText:', error.statusText);
-        console.error('Error message:', error.message);
-        if (error.error) {
-          console.error('Error body:', JSON.stringify(error.error, null, 2));
-        }
-        if (error.url) {
-          console.error('Error URL:', error.url);
+        const errorMessage = error.error?.message || error.error?.error || error.message || '';
+        const isDuplicateKey = error.status === 409 || 
+          errorMessage.includes('PRIMARY KEY constraint') || 
+          errorMessage.includes('duplicate key') ||
+          errorMessage.includes('already exists') ||
+          JSON.stringify(error.error || {}).toLowerCase().includes('primary key constraint') ||
+          JSON.stringify(error.error || {}).toLowerCase().includes('duplicate key');
+        
+        if (isDuplicateKey) {
+          console.log('ℹ️ Session already exists in database (duplicate key detected) - this is expected and will be handled gracefully');
+        } else {
+          console.error('❌ Error creating session:', error);
+          console.error('Error status:', error.status);
+          console.error('Error statusText:', error.statusText);
+          console.error('Error message:', errorMessage);
+          if (error.error) {
+            console.error('Error body:', JSON.stringify(error.error, null, 2));
+          }
+          if (error.url) {
+            console.error('Error URL:', error.url);
+          }
         }
         return throwError(() => error);
       })
