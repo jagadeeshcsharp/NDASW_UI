@@ -284,14 +284,10 @@ export class DatabaseService {
   }
 
   private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
-    const fileName = apiDocument.fileName || '';
-    const fileExtension = apiDocument.fileExtension || '';
-    const fullName = fileExtension ? `${fileName}.${fileExtension}` : fileName;
-    
     return {
       id: apiDocument.documentId,
-      name: fullName,
-      type: fileExtension
+      name: apiDocument.fileName || '',
+      type: apiDocument.fileExtension || ''
     };
   }
 
