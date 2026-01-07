@@ -131,7 +131,9 @@ export class ChatComponent implements OnInit, OnDestroy {
             role: 'user',
             content: questionText
           };
+          // this will insert data into ChatMessages table
           this.sessionService.addMessage(createdSession.id, userMessage);
+          // this will insert data into ChatSessions table
           this.sendChatRequest(createdSession, questionText);
         },
         error: (error) => {
@@ -146,7 +148,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       role: 'user',
       content: questionText
     };
-
+    // question from user
     this.sessionService.addMessage(sessionToUse.id, userMessage);
     this.sendChatRequest(sessionToUse, questionText);
   }
@@ -167,7 +169,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     };
 
     console.log('Sending message to n8n webhook:', request);
-
+    // Webhook call
     this.chatService.sendMessage(request).subscribe({
       next: (response) => {
         console.log('Response from n8n:', response);
@@ -180,6 +182,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           role: 'assistant',
           content: response.answer
         };
+        // answer from webhook
         this.sessionService.addMessage(sessionToUse.id, assistantMessage);
         this.loading = false;
         setTimeout(() => this.scrollToBottom(), 0);
