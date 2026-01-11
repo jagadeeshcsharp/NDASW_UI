@@ -8,17 +8,24 @@
     </div>
   </header>
   <div class="main-content">
-    <ng-container *ngIf="isAuthorized; else accessDeniedTemplate">
-      <app-session-list [collapsed]="sidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-session-list>
-      <app-chat [sidebarCollapsed]="sidebarCollapsed"></app-chat>
-    </ng-container>
-    <ng-template #accessDeniedTemplate>
-      <div class="access-denied-container">
-        <div class="access-denied-message">
-          <h2>Access Denied</h2>
-          <p>You do not have access to this application.</p>
-        </div>
+    <ng-container *ngIf="isLoading; else contentTemplate">
+      <div class="loading-container">
+        <div class="loading-spinner"></div>
       </div>
+    </ng-container>
+    <ng-template #contentTemplate>
+      <ng-container *ngIf="isAuthorized; else accessDeniedTemplate">
+        <app-session-list [collapsed]="sidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-session-list>
+        <app-chat [sidebarCollapsed]="sidebarCollapsed"></app-chat>
+      </ng-container>
+      <ng-template #accessDeniedTemplate>
+        <div class="access-denied-container">
+          <div class="access-denied-message">
+            <h2>Access Denied</h2>
+            <p>You do not have access to this application.</p>
+          </div>
+        </div>
+      </ng-template>
     </ng-template>
   </div>
 </div>

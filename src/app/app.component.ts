@@ -20,6 +20,7 @@ export class AppComponent implements OnInit, OnDestroy {
   sidebarCollapsed = false;
   isAuthenticated = false;
   isAuthorized = false;
+  isLoading = true;
   userName: string | null = null;
   private destroy$ = new Subject<void>();
   private authorizationChecked = false;
@@ -136,32 +137,37 @@ export class AppComponent implements OnInit, OnDestroy {
     
     if (!userEmail) {
       this.isAuthorized = false;
+      this.isLoading = false;
       return;
     }
 
-    // Check authorization by attempting to load sessions
-    // If the API returns 401/403, user is not authorized
+    // Check authorization by calling API
+    // Show loading until API response completes
+    // Only show "Access Denied" if API returns 401/403 (user not in system)
+    // All other responses (success, network errors, 500, etc.) allow access
     this.databaseService.getSessions(userEmail).subscribe({
       next: (sessions) => {
-        // If we can successfully fetch sessions (even if empty), user is authorized
+        // API responded successfully (even if empty array), user is authorized
         this.isAuthorized = true;
+        this.isLoading = false;
         // Reload sessions now that we know user is authorized
         // The session service will handle loading sessions properly
         this.sessionService.reloadSessions();
       },
       error: (error) => {
-        // Check for authorization errors
+        // Only show "Access Denied" if API explicitly returns 401/403 (user not in system)
+        // All other errors (network, 500, etc.) allow access (user might be authorized, just API issue)
         if (error.status === 401 || error.status === 403) {
-          console.warn('User is not authorized to access this application');
+          console.warn('User is not available in system (401/403)');
           this.isAuthorized = false;
         } else {
-          // For other errors (network, server errors), assume authorized
-          // but the app may not function properly
-          console.warn('Error checking authorization, assuming authorized:', error);
+          // For other errors, allow access - user might be authorized but API has issues
+          console.warn('Error checking authorization (non-401/403), allowing access:', error);
           this.isAuthorized = true;
           // Try to reload sessions anyway
           this.sessionService.reloadSessions();
         }
+        this.isLoading = false;
       }
     });
   }
