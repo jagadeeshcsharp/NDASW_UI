@@ -291,7 +291,17 @@ export class DatabaseService {
   private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
     const fileName = apiDocument.fileName || '';
     const fileExtension = apiDocument.fileExtension || '';
-    const fullName = fileExtension ? `${fileName}.${fileExtension}` : fileName;
+    
+    // Check if fileName already ends with the extension to avoid duplication (e.g., "file.pdf.pdf")
+    let fullName = fileName;
+    if (fileExtension) {
+      const extensionLower = fileExtension.toLowerCase();
+      const fileNameLower = fileName.toLowerCase();
+      // Check if fileName already ends with the extension
+      if (!fileNameLower.endsWith(`.${extensionLower}`)) {
+        fullName = `${fileName}.${fileExtension}`;
+      }
+    }
     
     return {
       id: apiDocument.documentId,
