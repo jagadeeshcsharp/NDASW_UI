@@ -85,14 +85,36 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private updateRagSourceNames(): void {
-    if (!this.selectedDocumentIds || this.selectedDocumentIds.length === 0 || this.allDocuments.length === 0) {
+    if (!this.selectedDocumentIds || this.selectedDocumentIds.length === 0) {
       this.selectedRagSourceNames = [];
       return;
     }
 
     const selectedDocId = this.selectedDocumentIds[0];
     const doc = this.allDocuments.find(d => d.id === selectedDocId);
-    this.selectedRagSourceNames = doc?.name ? [doc.name] : [];
+    
+    // If document is found, use its name
+    if (doc?.name) {
+      this.selectedRagSourceNames = [doc.name];
+    } else if (selectedDocId && this.allDocuments.length > 0) {
+      // Document ID exists but not found in allDocuments - this shouldn't happen
+      // but if it does, reload documents to ensure we have the latest data
+      console.warn(`Document not found in allDocuments for ID: ${selectedDocId}, reloading documents`);
+      this.documentService.getMockDocuments().subscribe(documents => {
+        this.allDocuments = documents;
+        const foundDoc = documents.find(d => d.id === selectedDocId);
+        this.selectedRagSourceNames = foundDoc?.name ? [foundDoc.name] : [selectedDocId];
+      });
+    } else if (selectedDocId) {
+      // Documents array is empty, reload them
+      this.documentService.getMockDocuments().subscribe(documents => {
+        this.allDocuments = documents;
+        const foundDoc = documents.find(d => d.id === selectedDocId);
+        this.selectedRagSourceNames = foundDoc?.name ? [foundDoc.name] : [selectedDocId];
+      });
+    } else {
+      this.selectedRagSourceNames = [];
+    }
   }
 
   ngOnDestroy(): void {
@@ -223,7 +245,12 @@ export class ChatComponent implements OnInit, OnDestroy {
     
     this.selectedDocumentIds = [documentIds[0]];
     this.showDocumentSelector = false;
-    this.updateRagSourceNames();
+    
+    // Reload documents to ensure allDocuments is up to date, then update RAG source names
+    this.documentService.getMockDocuments().subscribe(documents => {
+      this.allDocuments = documents;
+      this.updateRagSourceNames();
+    });
   }
 
   onKeyDown(event: KeyboardEvent): void {
