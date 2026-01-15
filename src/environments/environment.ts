@@ -1,7 +1,7 @@
 import { Configuration, BrowserCacheLocation } from '@azure/msal-browser';
 
 export const environment = {
-  n8nChatWebhookUrl: 'https://appservicencontainerndasw-g4afeuh4dkakbset.centralus-01.azurewebsites.net/webhook-test/chat-prompt',
+  n8nChatWebhookUrl: 'https://appservicencontainerndasw-g4afeuh4dkakbset.centralus-01.azurewebsites.net/webhook/chat-prompt',
   dotnetapi: 'https://appservicendasw-bbhnfqetahcvendf.centralus-01.azurewebsites.net/api/database'
 };
 
