@@ -85,6 +85,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   private updateRagSourceNames(): void {
+    // First, check if the current session has a ragSource from the database
+    if (this.currentSession?.ragSource) {
+      this.selectedRagSourceNames = [this.currentSession.ragSource];
+      return;
+    }
+
+    // If no ragSource in session, fall back to matching document IDs
     if (!this.selectedDocumentIds || this.selectedDocumentIds.length === 0) {
       this.selectedRagSourceNames = [];
       return;
