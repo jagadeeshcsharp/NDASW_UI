@@ -135,7 +135,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     const questionText = this.question.trim();
     
     if (this.selectedDocumentIds.length === 0) {
-      alert('Please select a RAG source document before sending a message.');
+      alert('Please select a Document Source document before sending a message.');
       this.showDocumentSelector = true;
       return;
     }
@@ -250,7 +250,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.selectedDocumentIds = [documentIds[0]];
     this.showDocumentSelector = false;
     
-    // Reload documents to ensure allDocuments is up to date, then update RAG source names
+    // Reload documents to ensure allDocuments is up to date, then update Document Source names
     this.documentService.getMockDocuments().subscribe(documents => {
       this.allDocuments = documents;
       this.updateRagSourceNames();

@@ -4,7 +4,7 @@
       <h2>{{ currentSession?.title || 'Select or create a chat session' }}</h2>
     </div>
     <div class="header-right">
-      <label class="rag-label">RAG source:</label>
+      <label class="rag-label">Document Source:</label>
       <div class="rag-display" *ngIf="selectedRagSourceNames.length > 0">
         <span class="rag-source-name">{{ selectedRagSourceNames[0] }}</span>
       </div>
@@ -114,7 +114,7 @@
           #messageInput
           [(ngModel)]="question"
           (keydown)="onKeyDown($event)"
-          [placeholder]="selectedDocumentIds.length === 0 ? 'Please select a RAG source first to start asking questions...' : 'Type your question here...'"
+          [placeholder]="selectedDocumentIds.length === 0 ? 'Please select a Document Source first to start asking questions...' : 'Type your question here...'"
           rows="1"
           class="message-input"
           [disabled]="loading || selectedDocumentIds.length === 0"
@@ -124,7 +124,7 @@
           [class.disabled]="!question.trim() || loading || selectedDocumentIds.length === 0"
           (click)="sendMessage()"
           [disabled]="!question.trim() || loading || selectedDocumentIds.length === 0"
-          [title]="selectedDocumentIds.length === 0 ? 'Please select a RAG source first' : (!question.trim() ? 'Enter a question to send' : 'Send message')"
+          [title]="selectedDocumentIds.length === 0 ? 'Please select a Document Source first' : (!question.trim() ? 'Enter a question to send' : 'Send message')"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 2L8 14M8 2L3 7M8 2L13 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
