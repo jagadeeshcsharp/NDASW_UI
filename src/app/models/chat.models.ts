@@ -19,7 +19,9 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
+  userId: string;
   title: string;
+  ragSource?: string;
   messages: ChatMessage[];
   selectedDocumentIds: string[];
   createdAt: Date;
@@ -28,8 +30,8 @@ export interface ChatSession {
 
 export interface Document {
   id: string;
-  name: string;
-  type?: string;
-  path?: string;
+  fileName: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 

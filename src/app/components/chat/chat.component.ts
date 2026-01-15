@@ -94,8 +94,8 @@ export class ChatComponent implements OnInit, OnDestroy {
     const doc = this.allDocuments.find(d => d.id === selectedDocId);
     
     // If document is found, use its name
-    if (doc?.name) {
-      this.selectedRagSourceNames = [doc.name];
+    if (doc?.fileName) {
+      this.selectedRagSourceNames = [doc.fileName];
     } else if (selectedDocId && this.allDocuments.length > 0) {
       // Document ID exists but not found in allDocuments - this shouldn't happen
       // but if it does, reload documents to ensure we have the latest data
@@ -103,14 +103,14 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.documentService.getMockDocuments().subscribe(documents => {
         this.allDocuments = documents;
         const foundDoc = documents.find(d => d.id === selectedDocId);
-        this.selectedRagSourceNames = foundDoc?.name ? [foundDoc.name] : [selectedDocId];
+        this.selectedRagSourceNames = foundDoc?.fileName ? [foundDoc.fileName] : [selectedDocId];
       });
     } else if (selectedDocId) {
       // Documents array is empty, reload them
       this.documentService.getMockDocuments().subscribe(documents => {
         this.allDocuments = documents;
         const foundDoc = documents.find(d => d.id === selectedDocId);
-        this.selectedRagSourceNames = foundDoc?.name ? [foundDoc.name] : [selectedDocId];
+        this.selectedRagSourceNames = foundDoc?.fileName ? [foundDoc.fileName] : [selectedDocId];
       });
     } else {
       this.selectedRagSourceNames = [];
@@ -146,7 +146,11 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.showDocumentSelector = false;
       this.loading = true;
       
-      this.sessionService.createSessionAndWait(sessionTitle, this.selectedDocumentIds).subscribe({
+      const selectedDocId = this.selectedDocumentIds[0];
+      const selectedDoc = this.allDocuments.find(doc => doc.id === selectedDocId);
+      const ragSourceName = selectedDoc?.fileName || selectedDocId;
+      
+      this.sessionService.createSessionAndWait(sessionTitle, this.selectedDocumentIds, ragSourceName).subscribe({
         next: (createdSession) => {
           sessionToUse = createdSession;
           const userMessage: Omit<ChatMessage, 'id' | 'timestamp'> = {
@@ -181,7 +185,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     const selectedDocId = this.selectedDocumentIds[0];
     const selectedDoc = this.allDocuments.find(doc => doc.id === selectedDocId);
-    const ragSourceName = selectedDoc?.name || selectedDocId;
+    const ragSourceName = selectedDoc?.fileName || selectedDocId;
     
     const request = {
       sessionId: sessionToUse.id,

@@ -87,11 +87,13 @@ export class SessionService {
     });
   }
 
-  createSession(title?: string, selectedDocumentIds?: string[]): ChatSession {
+  createSession(title?: string, selectedDocumentIds?: string[], ragSource?: string): ChatSession {
     const sessionId = this.generateId();
     const session: ChatSession = {
       id: sessionId,
+      userId: this.authService.getUserEmail() || '',
       title: title || 'New Chat',
+      ragSource: ragSource,
       messages: [],
       selectedDocumentIds: selectedDocumentIds || [],
       createdAt: new Date(),
@@ -118,7 +120,7 @@ export class SessionService {
     
     this.pendingSessionCreations.add(sessionId);
     
-    this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds).pipe(
+    this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds, ragSource).pipe(
       catchError(error => {
         const errorMessage = error.error?.message || error.error?.error || error.message || '';
         const errorBody = error.error || {};
@@ -193,11 +195,13 @@ export class SessionService {
     return session;
   }
 
-  createSessionAndWait(title?: string, selectedDocumentIds?: string[]): Observable<ChatSession> {
+  createSessionAndWait(title?: string, selectedDocumentIds?: string[], ragSource?: string): Observable<ChatSession> {
     const sessionId = this.generateId();
     const session: ChatSession = {
       id: sessionId,
+      userId: this.authService.getUserEmail() || '',
       title: title || 'New Chat',
+      ragSource: ragSource,
       messages: [],
       selectedDocumentIds: selectedDocumentIds || [],
       createdAt: new Date(),
@@ -243,7 +247,7 @@ export class SessionService {
     this.pendingSessionCreations.add(sessionId);
     this.setCurrentSession(session);
     
-    return this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds).pipe(
+    return this.databaseService.createSession(userEmail, sessionId, session.title, selectedDocumentIds, ragSource).pipe(
       catchError(error => {
         const errorMessage = error.error?.message || error.error?.error || error.message || '';
         const errorBody = error.error || {};
@@ -344,7 +348,8 @@ export class SessionService {
           userEmail,
           session.id,
           session.title,
-          session.selectedDocumentIds
+          session.selectedDocumentIds,
+          session.ragSource
         ).pipe(
           map(createdSession => {
             this.pendingSessionCreations.delete(session.id);

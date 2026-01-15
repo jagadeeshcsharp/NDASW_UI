@@ -9,7 +9,8 @@ export interface SessionApiResponse {
   sessionId: string;
   userId: string;
   title: string;
-  selectedDocumentIds: string[];
+  ragSource?: string | null;
+  selectedDocumentIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -31,8 +32,6 @@ export interface MessageApiResponse {
 export interface DocumentApiResponse {
   documentId: string;
   fileName: string;
-  fileExtension: string;
-  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,7 +112,7 @@ export class DatabaseService {
     );
   }
 
-  createSession(userId: string, sessionId: string, title: string, selectedDocumentIds?: string[]): Observable<ChatSession> {
+  createSession(userId: string, sessionId: string, title: string, selectedDocumentIds?: string[], ragSource?: string): Observable<ChatSession> {
     if (!this.apiUrl) {
       return throwError(() => new Error('Database API URL not configured'));
     }
@@ -122,6 +121,7 @@ export class DatabaseService {
       SessionId: sessionId,
       UserId: userId,
       Title: title,
+      RAGSource: ragSource || null,
       SelectedDocumentIds: selectedDocumentIds || []
     };
     
@@ -270,7 +270,9 @@ export class DatabaseService {
   private mapSessionFromApi(apiSession: SessionApiResponse): ChatSession {
     return {
       id: apiSession.sessionId,
+      userId: apiSession.userId,
       title: apiSession.title,
+      ragSource: apiSession.ragSource || undefined,
       messages: [],
       selectedDocumentIds: apiSession.selectedDocumentIds || [],
       createdAt: new Date(apiSession.createdAt),
@@ -289,24 +291,11 @@ export class DatabaseService {
   }
 
   private mapDocumentFromApi(apiDocument: DocumentApiResponse): Document {
-    const fileName = apiDocument.fileName || '';
-    const fileExtension = apiDocument.fileExtension || '';
-    
-    // Check if fileName already ends with the extension to avoid duplication (e.g., "file.pdf.pdf")
-    let fullName = fileName;
-    if (fileExtension) {
-      const extensionLower = fileExtension.toLowerCase();
-      const fileNameLower = fileName.toLowerCase();
-      // Check if fileName already ends with the extension
-      if (!fileNameLower.endsWith(`.${extensionLower}`)) {
-        fullName = `${fileName}.${fileExtension}`;
-      }
-    }
-    
     return {
       id: apiDocument.documentId,
-      name: fullName,
-      type: fileExtension
+      fileName: apiDocument.fileName || '',
+      createdAt: new Date(apiDocument.createdAt),
+      updatedAt: new Date(apiDocument.updatedAt)
     };
   }
 
